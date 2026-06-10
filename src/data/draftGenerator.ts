@@ -202,7 +202,7 @@ function copyFor(item: StructureItem, p: Project, idx: number): SectionCopy {
   };
 }
 
-const SECTION_BGS = ['#ffffff', '#faf8ff', '#ffffff', '#f6f7fb'];
+const SECTION_BGS = ['#ffffff', '#faf9f5', '#ffffff', '#f5f3ec'];
 
 /** 구조 + 후킹멘트 기반으로 섹션별 상세페이지 기획안 생성 */
 export function generateSections(p: Project): Section[] {

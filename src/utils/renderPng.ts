@@ -17,10 +17,14 @@ export function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 /**
- * 캔버스에 직접 그려 PNG Blob 생성 (2배 스케일 — 고화질).
+ * 캔버스에 직접 그려 PNG 생성 (scale배 해상도).
  * 문서에 로드된 웹폰트를 그대로 사용하므로 SVG 래스터화보다 폰트가 안정적으로 나온다.
  */
-export async function renderPng(section: Section, width: number, scale = 2): Promise<Blob> {
+export async function renderPngCanvas(
+  section: Section,
+  width: number,
+  scale = 2,
+): Promise<HTMLCanvasElement> {
   await document.fonts.ready;
   const lay = layoutSection(section, width);
   const h = Math.ceil(lay.height);
@@ -70,7 +74,36 @@ export async function renderPng(section: Section, width: number, scale = 2): Pro
     }
   }
 
+  return canvas;
+}
+
+export function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('PNG 생성 실패'))), 'image/png'),
   );
+}
+
+export async function renderPng(section: Section, width: number, scale = 2): Promise<Blob> {
+  return canvasToBlob(await renderPngCanvas(section, width, scale));
+}
+
+/** 선택된 섹션들을 세로로 이어붙인 한 장짜리 PNG */
+export async function renderPngCombined(
+  sections: Section[],
+  width: number,
+  scale = 2,
+): Promise<Blob> {
+  const canvases: HTMLCanvasElement[] = [];
+  for (const s of sections) canvases.push(await renderPngCanvas(s, width, scale));
+  const total = canvases.reduce((a, c) => a + c.height, 0);
+  const master = document.createElement('canvas');
+  master.width = Math.round(width * scale);
+  master.height = total;
+  const c = master.getContext('2d')!;
+  let y = 0;
+  for (const cv of canvases) {
+    c.drawImage(cv, 0, y);
+    y += cv.height;
+  }
+  return canvasToBlob(master);
 }

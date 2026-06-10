@@ -17,6 +17,7 @@ const ADMIN_ID = 'adminadmin';
 const ADMIN_PW = 'adminadmin';
 
 export type View = 'login' | 'dashboard' | 'admin' | 'wizard';
+export type Lang = 'ko' | 'en' | 'ja' | 'zh';
 
 interface AppState {
   // auth
@@ -29,6 +30,10 @@ interface AppState {
   // routing
   view: View;
   setView: (v: View) => void;
+
+  // UI 언어 (한/영/일/중)
+  lang: Lang;
+  setLang: (l: Lang) => void;
 
   // 관리자 스타일 학습 데이터
   refs: RefAsset[];
@@ -69,6 +74,9 @@ export const useStore = create<AppState>()(
 
       view: 'login',
       setView: (view) => set({ view }),
+
+      lang: 'ko',
+      setLang: (lang) => set({ lang }),
 
       refs: [],
       addRef: (r) => set({ refs: [...get().refs, { ...r, id: uid(), createdAt: Date.now() }] }),
@@ -128,6 +136,7 @@ export const useStore = create<AppState>()(
         projects: s.projects,
         customFonts: s.customFonts,
         ai: s.ai,
+        lang: s.lang,
       }),
     },
   ),

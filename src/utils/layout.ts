@@ -1,4 +1,5 @@
 import type { Block, Section } from '../state/types';
+import { segmentLine, styleAt } from './richText';
 
 /**
  * 섹션 → 그리기 프리미티브 목록.
@@ -79,6 +80,58 @@ function blockWeight(b: Block): number {
   return b.bold || b.kind === 'heading' ? 800 : 400;
 }
 
+/** 부분 스타일(runs) 블록용 — 원본 인덱스를 추적하는 줄바꿈 */
+function wrapIndexed(
+  b: Block,
+  maxW: number,
+  c: CanvasRenderingContext2D,
+): { text: string; startIdx: number }[] {
+  const lines: { text: string; startIdx: number }[] = [];
+  let off = 0;
+  for (const para of b.text.split('\n')) {
+    if (!para) {
+      lines.push({ text: '', startIdx: off });
+      off += 1;
+      continue;
+    }
+    let line = '';
+    let lineStart = off;
+    let w = 0;
+    let lastSpace = -1;
+    const segWidth = (s: string, from: number) => {
+      let sw = 0;
+      let k = from;
+      for (const ch of s) {
+        const st = styleAt(b, k);
+        setFont(c, b.font, b.fontSize, st.bold ? 800 : 400);
+        sw += c.measureText(ch).width;
+        k += 1;
+      }
+      return sw;
+    };
+    for (let j = 0; j < para.length; j++) {
+      const ch = para[j];
+      const st = styleAt(b, off + j);
+      setFont(c, b.font, b.fontSize, st.bold ? 800 : 400);
+      const cw = c.measureText(ch).width;
+      if (w + cw > maxW && line) {
+        const brk = lastSpace > 0 ? lastSpace + 1 : line.length;
+        lines.push({ text: line.slice(0, brk).trimEnd(), startIdx: lineStart });
+        line = line.slice(brk);
+        lineStart += brk;
+        w = segWidth(line, lineStart);
+        lastSpace = line.lastIndexOf(' ');
+      }
+      line += ch;
+      w += cw;
+      if (ch === ' ') lastSpace = line.length - 1;
+    }
+    lines.push({ text: line.trimEnd(), startIdx: lineStart });
+    off += para.length + 1;
+  }
+  return lines;
+}
+
 /** 연속된 동일 cardBg 블록을 한 카드로 묶는다 (리뷰 카드·쿠폰 템플릿) */
 function cardSegments(blocks: Block[]): { cardBg: string | null; blocks: Block[] }[] {
   const segs: { cardBg: string | null; blocks: Block[] }[] = [];
@@ -119,6 +172,53 @@ export function layoutSection(section: Section, width: number): SectionLayout {
           prims.push({ type: 'placeholder', x: PAD_X, y, w: maxW, h, descLines });
           y += h + GAP;
         }
+        continue;
+      }
+
+      // 부분 스타일(runs)이 있으면 글자별 스타일 세그먼트로 분리해 배치
+      if (b.runs?.length) {
+        const lineH = Math.round(b.fontSize * 1.55);
+        for (const { text: line, startIdx } of wrapIndexed(b, maxW, c)) {
+          if (!line) {
+            y += lineH * 0.6;
+            continue;
+          }
+          const segs = segmentLine(b, line, startIdx);
+          const widths = segs.map((s) => {
+            setFont(c, b.font, b.fontSize, s.style.bold ? 800 : 400);
+            return c.measureText(s.text).width;
+          });
+          const total = widths.reduce((a, v) => a + v, 0);
+          let sx =
+            b.align === 'left' ? PAD_X : b.align === 'right' ? width - PAD_X - total : (width - total) / 2;
+          const baseline = y + b.fontSize;
+          segs.forEach((s, si) => {
+            if (s.style.highlight) {
+              prims.push({
+                type: 'rect', x: sx - 2, y: y + b.fontSize * 0.08,
+                w: widths[si] + 4, h: b.fontSize * 1.3, color: s.style.highlight, rx: 4,
+              });
+            }
+            let charXs: number[] | null = null;
+            if (b.animation) {
+              charXs = [];
+              setFont(c, b.font, b.fontSize, s.style.bold ? 800 : 400);
+              let cx = sx;
+              for (const ch of s.text) {
+                charXs.push(cx);
+                cx += c.measureText(ch).width;
+              }
+            }
+            prims.push({
+              type: 'line', text: s.text, x: sx, baseline,
+              font: b.font, size: b.fontSize, weight: s.style.bold ? 800 : 400,
+              color: s.style.color, anim: b.animation, charXs,
+            });
+            sx += widths[si];
+          });
+          y += lineH;
+        }
+        y += GAP;
         continue;
       }
 

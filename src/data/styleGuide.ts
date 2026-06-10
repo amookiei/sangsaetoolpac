@@ -5,7 +5,7 @@ export const DEFAULT_STYLE_GUIDE: StyleGuide = {
   headingFont: DEFAULT_FONT,
   headingColor: '#1a1a2e',
   headingBold: true,
-  emphasisColor: '#8b3dff',
+  emphasisColor: '#d97757',
   emphasisHighlight: '#fff176',
   bodyFont: DEFAULT_FONT,
   bodyColor: '#555566',

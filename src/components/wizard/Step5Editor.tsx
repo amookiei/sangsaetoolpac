@@ -5,6 +5,9 @@ import { PLATFORM_WIDTH } from '../../data/categories';
 import { applyStyleGuide, guideOf } from '../../data/styleGuide';
 import { TEMPLATE_GROUPS, TEXT_TEMPLATES, instantiate } from '../../data/textTemplates';
 import { readFileAsDataUrl, imageSize } from '../../utils/files';
+import { addRun, clearRuns, clampRuns } from '../../utils/richText';
+import { translateSections, CONTENT_LANGS, type ContentLang } from '../../utils/translate';
+import { useT } from '../../i18n';
 import { SectionPreview } from '../editor/SectionPreview';
 import { AnimPicker } from '../editor/AnimPicker';
 import { StyleGuideModal } from '../editor/StyleGuideModal';
@@ -15,11 +18,17 @@ const CARD_BGS = ['#f6f7f9', '#fff4ec', '#fdf3f8', '#eef4ff', '#ff6b52', '#1a1a2
 
 /** 5단계: Canva 스타일 디자인 에디터 — 스타일 정립·텍스트 템플릿·폰트·모션 편집 */
 export function Step5Editor({ project }: { project: Project }) {
-  const { updateProject, updateSection, customFonts, addCustomFont } = useStore();
+  const { updateProject, updateSection, customFonts, addCustomFont, ai } = useStore();
+  const t = useT();
   const [secIdx, setSecIdx] = useState(0);
   const [selBlock, setSelBlock] = useState<string | null>(null);
   const [tab, setTab] = useState<'sections' | 'templates'>('sections');
   const [showGuide, setShowGuide] = useState(false);
+  const [selRange, setSelRange] = useState<{ start: number; end: number } | null>(null);
+  const [runColor, setRunColor] = useState('#d97757');
+  const [runHl, setRunHl] = useState('#fff176');
+  const [transLang, setTransLang] = useState<ContentLang>('en');
+  const [transBusy, setTransBusy] = useState(false);
   const imgInput = useRef<HTMLInputElement>(null);
   const fontInput = useRef<HTMLInputElement>(null);
 
@@ -110,10 +119,43 @@ export function Step5Editor({ project }: { project: Project }) {
   return (
     <>
       <div className="wz-head">
-        <h2>5. 디자인 에디터</h2>
+        <h2>5. {t('디자인 에디터')}</h2>
         <button className="btn ghost sm" onClick={() => setShowGuide(true)}>
-          🎨 디자인 스타일 정립
+          🎨 {t('디자인 스타일 정립')}
         </button>
+        <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+          <select
+            className="input"
+            style={{ width: 120, padding: '6px 8px', fontSize: 13 }}
+            value={transLang}
+            onChange={(e) => setTransLang(e.target.value as ContentLang)}
+          >
+            {CONTENT_LANGS.map((l) => (
+              <option key={l.code} value={l.code}>{l.label}</option>
+            ))}
+          </select>
+          <button
+            className="btn subtle sm"
+            disabled={transBusy}
+            onClick={async () => {
+              if (!ai.geminiKey) {
+                alert('본문 번역에는 Gemini API 키가 필요합니다. 6단계에서 키를 입력해 주세요 (AI Studio 무료 발급).');
+                return;
+              }
+              setTransBusy(true);
+              try {
+                const sections = await translateSections(project, transLang, ai.geminiKey);
+                updateProject(project.id, { sections });
+              } catch (e) {
+                alert(e instanceof Error ? e.message : '번역 실패');
+              } finally {
+                setTransBusy(false);
+              }
+            }}
+          >
+            {transBusy ? '번역 중…' : `🌐 ${t('본문 번역')}`}
+          </button>
+        </span>
         <span className="hint">블록을 클릭해 세부 조정 (기준 폭 {width}px)</span>
       </div>
 
@@ -242,8 +284,60 @@ export function Step5Editor({ project }: { project: Project }) {
               <textarea
                 className="input"
                 value={block.text}
-                onChange={(e) => patchBlock({ text: e.target.value })}
+                onChange={(e) =>
+                  patchBlock({ text: e.target.value, runs: clampRuns(block.runs, e.target.value.length) })
+                }
+                onSelect={(e) => {
+                  const el = e.currentTarget;
+                  setSelRange({ start: el.selectionStart, end: el.selectionEnd });
+                }}
               />
+              <label className="label">부분 스타일 — 위 입력창에서 글자를 드래그한 뒤 적용</label>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                <button
+                  className="btn subtle sm"
+                  disabled={!selRange || selRange.start === selRange.end}
+                  onClick={() =>
+                    selRange && patchBlock({ runs: addRun(block.runs, { ...selRange, bold: true }) })
+                  }
+                >
+                  B 굵게
+                </button>
+                <input type="color" value={runColor} onChange={(e) => setRunColor(e.target.value)} />
+                <button
+                  className="btn subtle sm"
+                  disabled={!selRange || selRange.start === selRange.end}
+                  onClick={() =>
+                    selRange && patchBlock({ runs: addRun(block.runs, { ...selRange, color: runColor }) })
+                  }
+                >
+                  색 적용
+                </button>
+                <input type="color" value={runHl} onChange={(e) => setRunHl(e.target.value)} />
+                <button
+                  className="btn subtle sm"
+                  disabled={!selRange || selRange.start === selRange.end}
+                  onClick={() =>
+                    selRange && patchBlock({ runs: addRun(block.runs, { ...selRange, highlight: runHl }) })
+                  }
+                >
+                  형광펜
+                </button>
+                <button
+                  className="btn subtle sm"
+                  disabled={!selRange || selRange.start === selRange.end || !block.runs?.length}
+                  onClick={() =>
+                    selRange && patchBlock({ runs: clearRuns(block.runs, selRange.start, selRange.end) })
+                  }
+                >
+                  지우기
+                </button>
+              </div>
+              {selRange && selRange.start !== selRange.end && (
+                <p className="hint" style={{ marginTop: 6 }}>
+                  선택됨: “{block.text.slice(selRange.start, selRange.end)}”
+                </p>
+              )}
               <button
                 className="btn ghost sm"
                 style={{ marginTop: 8 }}

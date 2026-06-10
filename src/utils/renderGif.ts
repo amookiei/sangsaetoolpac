@@ -171,7 +171,7 @@ function drawAnimLine(c: CanvasRenderingContext2D, line: AnimLine, t: number) {
 
       if (st.bgFlash > 0.02) {
         c.globalAlpha = Math.min(st.opacity, st.bgFlash);
-        c.fillStyle = '#8b5cf6';
+        c.fillStyle = '#d97757';
         c.fillRect(-w / 2 - 2, -fs * 0.72, w + 4, fs * 1.3);
       }
       c.globalAlpha = st.textAlpha !== null ? st.textAlpha : st.opacity;

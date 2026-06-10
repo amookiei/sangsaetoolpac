@@ -6,7 +6,7 @@ export function Logo({ size = 34 }: { size?: number }) {
       width={size}
       height={size}
       alt="상세 스튜디오"
-      style={{ display: 'block', filter: 'drop-shadow(0 4px 10px rgba(125,42,232,0.35))' }}
+      style={{ display: 'block', filter: 'drop-shadow(0 3px 8px rgba(194,91,57,0.3))' }}
     />
   );
 }

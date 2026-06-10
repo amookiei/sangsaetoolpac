@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useStore, useCurrentProject } from '../../state/store';
 import { CATEGORY_LABEL, PLATFORM_LABEL } from '../../data/categories';
+import { useT } from '../../i18n';
 import { Step1Brief } from './Step1Brief';
 import { Step2Structure } from './Step2Structure';
 import { Step3Hooks } from './Step3Hooks';
@@ -22,6 +23,7 @@ const STEPS = [
 export function Wizard() {
   const project = useCurrentProject();
   const { updateProject, setView } = useStore();
+  const t = useT();
   useEffect(() => {
     if (!project) setView('dashboard');
   }, [project, setView]);
@@ -35,7 +37,7 @@ export function Wizard() {
         <div style={{ padding: '4px 12px 14px' }}>
           <div style={{ fontWeight: 900, fontSize: 15 }}>{project.name}</div>
           <div className="hint">
-            {PLATFORM_LABEL[project.platform]} · {CATEGORY_LABEL[project.category]}
+            {t(PLATFORM_LABEL[project.platform])} · {t(CATEGORY_LABEL[project.category])}
           </div>
         </div>
         {STEPS.map((s, i) => {
@@ -49,8 +51,8 @@ export function Wizard() {
             >
               <span className="wz-num">{n < step ? '✓' : n}</span>
               <span>
-                <span className="wz-step-name">{s.name}</span>
-                <div className="wz-step-desc">{s.desc}</div>
+                <span className="wz-step-name">{t(s.name)}</span>
+                <div className="wz-step-desc">{t(s.desc)}</div>
               </span>
             </button>
           );
@@ -69,13 +71,13 @@ export function Wizard() {
 
       <div className="wz-foot">
         <button className="btn subtle" disabled={step <= 1} onClick={() => go(step - 1)}>
-          ← 이전 단계
+          {t('← 이전 단계')}
         </button>
         <span className="hint">
-          {step}/7 · {STEPS[step - 1].name}
+          {step}/7 · {t(STEPS[step - 1].name)}
         </span>
         <button className="btn" disabled={step >= 7} onClick={() => go(step + 1)}>
-          다음 단계 →
+          {t('다음 단계 →')}
         </button>
       </div>
     </div>

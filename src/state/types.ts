@@ -25,6 +25,15 @@ export interface OmniAsset {
 
 export type BlockKind = 'heading' | 'body' | 'image';
 
+/** 글자 범위 부분 스타일 — 텍스트 드래그 선택 후 굵게/색/형광펜 적용 */
+export interface StyleRun {
+  start: number; // 전체 텍스트(개행 포함) 기준 시작 인덱스
+  end: number; // exclusive
+  bold?: boolean;
+  color?: string;
+  highlight?: string;
+}
+
 export interface Block {
   id: string;
   kind: BlockKind;
@@ -41,6 +50,7 @@ export interface Block {
   bold: boolean;
   animation: string | null; // 타이포 애니메이션 프리셋 id
   cardBg?: string | null; // 블록 전체 카드 배경 (리뷰 카드·쿠폰 등 템플릿용)
+  runs?: StyleRun[]; // 글자 단위 부분 스타일
 }
 
 /** 디자인 스타일 가이드 — 에디터에서 정립 후 전체 섹션에 일괄 적용 */

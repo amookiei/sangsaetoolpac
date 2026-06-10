@@ -22,11 +22,11 @@ export const PLATFORM_WIDTH: Record<Platform, number> = {
   wadiz: 1000,
 };
 
-/** 카테고리별 기본 무드 팔레트 (AI 플레이스홀더·배경 추천에 사용) */
+/** 카테고리별 기본 무드 팔레트 (AI 플레이스홀더·프로젝트 썸네일) — 차분한 어스 톤 */
 export const CATEGORY_PALETTE: Record<Category, [string, string]> = {
-  food: ['#ff9a56', '#ff5e62'],
-  tech: ['#4f6df5', '#23b5d3'],
-  life: ['#7ec8a9', '#f6e7b4'],
-  beauty: ['#f5b3c8', '#c89af0'],
-  serviceai: ['#8b5cf6', '#3b82f6'],
+  food: ['#e2a276', '#c97d52'],
+  tech: ['#9fb0bf', '#71889c'],
+  life: ['#b3c2a0', '#8da37e'],
+  beauty: ['#dcb3bb', '#bd8a96'],
+  serviceai: ['#b5a8c9', '#8e7dab'],
 };

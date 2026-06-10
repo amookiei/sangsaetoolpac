@@ -61,5 +61,5 @@ export const TYPO_KEYFRAMES_CSS = `
 @keyframes ta-blurfade { 0% { opacity: 0; filter: blur(8px); } 35% { opacity: 1; filter: blur(0); } 75% { opacity: 1; filter: blur(0); } 100% { opacity: 0; filter: blur(8px); } }
 @keyframes ta-chain { 0% { opacity: 0; transform: scale(0); } 70% { opacity: 1; transform: scale(1.25); } 100% { opacity: 1; transform: scale(1); } }
 @keyframes ta-unfold { from { opacity: 0; transform: scaleX(0.2); filter: blur(4px); } to { opacity: 1; transform: scaleX(1); filter: blur(0); } }
-@keyframes ta-blockgen { 0% { opacity: 0; background-color: #8b5cf6; color: transparent; } 60% { opacity: 1; background-color: #8b5cf6; color: transparent; } 100% { opacity: 1; } }
+@keyframes ta-blockgen { 0% { opacity: 0; background-color: #d97757; color: transparent; } 60% { opacity: 1; background-color: #d97757; color: transparent; } 100% { opacity: 1; } }
 `;

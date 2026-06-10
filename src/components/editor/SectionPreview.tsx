@@ -1,5 +1,6 @@
 import type { Block, Section } from '../../state/types';
 import { TypoText } from './TypoText';
+import { segmentLine } from '../../utils/richText';
 
 /**
  * 섹션 라이브 미리보기 (HTML 렌더 — 애니메이션 실시간 재생).
@@ -60,6 +61,16 @@ export function SectionPreview({
   );
 }
 
+function splitWithOffsets(text: string): { line: string; startIdx: number }[] {
+  const out: { line: string; startIdx: number }[] = [];
+  let off = 0;
+  for (const line of text.split('\n')) {
+    out.push({ line, startIdx: off });
+    off += line.length + 1;
+  }
+  return out;
+}
+
 function BlockView({ b }: { b: Block }) {
   if (b.kind === 'image') {
     if (b.imageDataUrl) {
@@ -75,6 +86,34 @@ function BlockView({ b }: { b: Block }) {
     );
   }
   const weight = b.bold || b.kind === 'heading' ? 800 : 400;
+
+  // 부분 스타일(runs): 줄을 스타일 세그먼트로 나눠 렌더
+  if (b.runs?.length) {
+    const lines = splitWithOffsets(b.text);
+    return (
+      <div style={{ textAlign: b.align, lineHeight: 1.55, fontFamily: `"${b.font}", "Noto Sans KR", sans-serif`, fontSize: b.fontSize }}>
+        {lines.map(({ line, startIdx }, i) => (
+          <div key={i}>
+            {segmentLine(b, line, startIdx).map((seg, si) => (
+              <span
+                key={si}
+                style={{
+                  fontWeight: seg.style.bold ? 800 : 400,
+                  color: seg.style.color,
+                  background: seg.style.highlight ?? undefined,
+                  padding: seg.style.highlight ? '0 3px' : undefined,
+                  borderRadius: seg.style.highlight ? 4 : undefined,
+                }}
+              >
+                {seg.text}
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div style={{ textAlign: b.align, lineHeight: 1.55 }}>
       {b.text.split('\n').map((line, i) => (
