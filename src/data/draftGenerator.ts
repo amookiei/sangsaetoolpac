@@ -95,6 +95,7 @@ interface SectionCopy {
   body: string;
   imageDesc: string;
 }
+export type { SectionCopy };
 
 /** 구조 항목 이름을 보고 섹션별 카피·이미지 묘사를 생성 */
 function copyFor(item: StructureItem, p: Project, idx: number): SectionCopy {
@@ -140,10 +141,11 @@ function copyFor(item: StructureItem, p: Project, idx: number): SectionCopy {
   }
   if (n.startsWith('특징')) {
     const num = n.match(/\d/)?.[0] ?? String(idx);
+    const feature = n.split('·')[1]?.trim();
     return {
-      heading: `POINT ${num}. ${n.split('·')[1]?.trim() ?? kw}`,
-      body: `${kw}을(를) 위해 디테일까지 설계했습니다.\n직접 경험하면 차이가 느껴집니다.`,
-      imageDesc: `[특징 연출컷] "${n}"을 보여주는 클로즈업/사용 장면. 제품은 옴니버스 자산과 동일하게, 배경은 카테고리 무드 팔레트.`,
+      heading: `POINT ${num}. ${feature ?? '핵심 포인트'}`,
+      body: `사소한 디테일까지 다시 설계했습니다.\n직접 경험해 보면 차이가 느껴집니다.`,
+      imageDesc: `[특징 연출컷] "${n}"을 보여주는 클로즈업/사용 장면. 제품은 옴니버스 자산과 동일하게, 배경은 카테고리 무드 팔레트. 키워드: ${kw}`,
     };
   }
   if (n.includes('비교') || n.includes('차별')) {
@@ -204,10 +206,10 @@ function copyFor(item: StructureItem, p: Project, idx: number): SectionCopy {
 
 const SECTION_BGS = ['#ffffff', '#faf9f5', '#ffffff', '#f5f3ec'];
 
-/** 구조 + 후킹멘트 기반으로 섹션별 상세페이지 기획안 생성 */
-export function generateSections(p: Project): Section[] {
+/** 섹션 카피 목록 → 섹션 블록 구성 (로컬 템플릿·AI 생성 공용) */
+export function buildSections(p: Project, copies: SectionCopy[]): Section[] {
   return p.structure.map((item, i) => {
-    const c = copyFor(item, p, i);
+    const c = copies[i];
     const isIntro = i === 0;
     const blocks: Block[] = [
       makeBlock({
@@ -234,4 +236,9 @@ export function generateSections(p: Project): Section[] {
       blocks,
     };
   });
+}
+
+/** 구조 + 후킹멘트 기반으로 섹션별 상세페이지 기획안 생성 (로컬 템플릿 — API 비용 0원) */
+export function generateSections(p: Project): Section[] {
+  return buildSections(p, p.structure.map((item, i) => copyFor(item, p, i)));
 }
