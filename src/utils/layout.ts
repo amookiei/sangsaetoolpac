@@ -26,7 +26,21 @@ export interface SectionLayout {
   width: number;
   height: number;
   bg: string;
+  bgGrad: { color2: string; angle: number } | null;
   prims: Prim[];
+}
+
+/** CSS linear-gradient 각도(0=위, 90=오른쪽) → 시작/끝 좌표 */
+export function gradPoints(angle: number, w: number, h: number) {
+  const rad = (angle * Math.PI) / 180;
+  const vx = Math.sin(rad);
+  const vy = -Math.cos(rad);
+  return {
+    x1: (0.5 - vx * 0.5) * w,
+    y1: (0.5 - vy * 0.5) * h,
+    x2: (0.5 + vx * 0.5) * w,
+    y2: (0.5 + vy * 0.5) * h,
+  };
 }
 
 const PAD_X = 64;
@@ -160,18 +174,25 @@ export function layoutSection(section: Section, width: number): SectionLayout {
     }
 
     for (const b of seg.blocks) {
+      const blockTop = y; // 블록 높이(heightPx) 적용 기준 — 상단 고정
+      const applyMinHeight = () => {
+        if (b.heightPx && y - blockTop < b.heightPx) y = blockTop + b.heightPx;
+      };
+
       if (b.kind === 'image') {
         if (b.imageDataUrl && b.imgW > 0) {
           const w = Math.min(maxW, b.imgW);
           const h = (b.imgH / b.imgW) * w;
           prims.push({ type: 'image', x: (width - w) / 2, y, w, h, dataUrl: b.imageDataUrl });
-          y += h + GAP;
+          y += h;
         } else {
           const h = 300;
           const descLines = wrapText(b.imageDesc || '이미지 영역', 'Pretendard Variable', 16, 400, maxW - 80);
           prims.push({ type: 'placeholder', x: PAD_X, y, w: maxW, h, descLines });
-          y += h + GAP;
+          y += h;
         }
+        applyMinHeight();
+        y += GAP;
         continue;
       }
 
@@ -218,6 +239,7 @@ export function layoutSection(section: Section, width: number): SectionLayout {
           });
           y += lineH;
         }
+        applyMinHeight();
         y += GAP;
         continue;
       }
@@ -268,6 +290,7 @@ export function layoutSection(section: Section, width: number): SectionLayout {
         });
         y += lineH;
       }
+      applyMinHeight();
       y += GAP;
     }
 
@@ -286,5 +309,11 @@ export function layoutSection(section: Section, width: number): SectionLayout {
     }
   }
 
-  return { width, height: Math.max(y - GAP + PAD_Y, 200), bg: section.bg, prims };
+  return {
+    width,
+    height: Math.max(y - GAP + PAD_Y, 200),
+    bg: section.bg,
+    bgGrad: section.bgGrad ?? null,
+    prims,
+  };
 }

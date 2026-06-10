@@ -234,6 +234,15 @@ textarea.img-desc { resize: vertical; outline: none; min-height: 60px; }
 .ed-block { position: relative; cursor: pointer; border: 2px solid transparent; border-radius: 6px; }
 .ed-block:hover { border-color: rgba(217, 119, 87, 0.35); }
 .ed-block.sel { border-color: var(--accent); }
+.resize-handle {
+  position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%);
+  width: 56px; height: 12px; border-radius: 7px; cursor: ns-resize;
+  background: var(--accent); opacity: 0.85; border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(31, 30, 27, 0.25); z-index: 5;
+}
+.resize-handle:hover { opacity: 1; }
+.ed-sec-item.dragging { opacity: 0.4; }
+.ed-sec-item.drag-over { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(217, 119, 87, 0.25); }
 .ed-inspector { width: 300px; flex-shrink: 0; position: sticky; top: 78px; max-height: calc(100vh - 140px); overflow-y: auto; }
 
 /* 타이포 애니메이션 픽커 */

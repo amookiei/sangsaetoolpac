@@ -10,8 +10,12 @@ import type { Category, Platform } from '../state/types';
  * 저장된 레퍼런스 수와 메모는 구조 추천·AI 프롬프트의 스타일 근거로 활용된다.
  */
 export function AdminPanel() {
-  const { refs, addRef, removeRef, updateRefNote } = useStore();
+  const { refs, addRef, removeRef, updateRefNote, accounts, addAccount, updateAccount, removeAccount } =
+    useStore();
   const [platform, setPlatform] = useState<Platform>('smartstore');
+  const [newId, setNewId] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [newKey, setNewKey] = useState('');
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const upload = async (cat: Category, files: FileList | null) => {
@@ -97,6 +101,77 @@ export function AdminPanel() {
             </div>
           );
         })}
+      </div>
+
+      <div className="card" style={{ marginTop: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <strong>계정 관리</strong>
+          <span className="hint">계정별로 Gemini API 키를 미리 설정 — 로그인하면 자동 적용됩니다</span>
+        </div>
+
+        {accounts.map((a) => (
+          <div key={a.id} className="export-row" style={{ marginTop: 12 }}>
+            <span className="badge">{a.id}</span>
+            <input
+              className="input"
+              style={{ flex: 1, padding: '7px 10px', fontSize: 13 }}
+              type="password"
+              placeholder="Gemini API 키 (AIza...)"
+              value={a.geminiKey}
+              onChange={(e) => updateAccount(a.id, { geminiKey: e.target.value })}
+            />
+            <button
+              className="btn danger sm"
+              onClick={() => confirm(`'${a.id}' 계정을 삭제할까요?`) && removeAccount(a.id)}
+            >
+              삭제
+            </button>
+          </div>
+        ))}
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+          <input
+            className="input"
+            style={{ width: 150 }}
+            placeholder="아이디"
+            value={newId}
+            onChange={(e) => setNewId(e.target.value)}
+          />
+          <input
+            className="input"
+            style={{ width: 150 }}
+            type="password"
+            placeholder="비밀번호"
+            value={newPw}
+            onChange={(e) => setNewPw(e.target.value)}
+          />
+          <input
+            className="input"
+            style={{ flex: 1, minWidth: 200 }}
+            type="password"
+            placeholder="Gemini API 키 (선택 — aistudio.google.com 무료 발급)"
+            value={newKey}
+            onChange={(e) => setNewKey(e.target.value)}
+          />
+          <button
+            className="btn"
+            disabled={
+              !newId.trim() || !newPw.trim() || accounts.some((a) => a.id === newId.trim()) || newId.trim() === 'adminadmin'
+            }
+            onClick={() => {
+              addAccount({ id: newId.trim(), pw: newPw, geminiKey: newKey.trim() });
+              setNewId('');
+              setNewPw('');
+              setNewKey('');
+            }}
+          >
+            + 계정 추가
+          </button>
+        </div>
+        <p className="hint" style={{ marginBottom: 0, marginTop: 10 }}>
+          ⚠ 개발용 로컬 저장입니다 — 운영 배포 시 Supabase Auth + 서버 측 키 관리로 교체하세요
+          (docs/DATABASE.md).
+        </p>
       </div>
 
       <div className="card" style={{ marginTop: 20 }}>

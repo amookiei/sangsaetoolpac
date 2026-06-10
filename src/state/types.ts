@@ -51,6 +51,13 @@ export interface Block {
   animation: string | null; // 타이포 애니메이션 프리셋 id
   cardBg?: string | null; // 블록 전체 카드 배경 (리뷰 카드·쿠폰 등 템플릿용)
   runs?: StyleRun[]; // 글자 단위 부분 스타일
+  heightPx?: number | null; // 블록 최소 높이 — 상단 고정, 하단으로 늘어남
+}
+
+/** 섹션 배경 그라디언트 (bg → color2, CSS 각도) */
+export interface BgGrad {
+  color2: string;
+  angle: number; // 0=위, 90=오른쪽 (CSS linear-gradient 기준)
 }
 
 /** 디자인 스타일 가이드 — 에디터에서 정립 후 전체 섹션에 일괄 적용 */
@@ -73,6 +80,7 @@ export interface Section {
   name: string;
   purpose: string;
   bg: string;
+  bgGrad?: BgGrad | null; // 설정 시 bg → color2 그라디언트 배경
   blocks: Block[];
 }
 
@@ -112,4 +120,11 @@ export interface AiConfig {
   geminiKey: string;
   openaiKey: string;
   freeMode: boolean; // 무료 테스트 모드 (로컬 플레이스홀더 생성)
+}
+
+/** 로그인 계정 — 관리자가 미리 만들고 Gemini 키를 사전 설정 (개발용 로컬 저장) */
+export interface Account {
+  id: string;
+  pw: string;
+  geminiKey: string;
 }

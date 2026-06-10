@@ -1,5 +1,19 @@
 import type { Section } from '../state/types';
-import { layoutSection, setFont } from './layout';
+import { layoutSection, setFont, gradPoints, type SectionLayout } from './layout';
+
+/** 섹션 배경 채우기 (단색 또는 그라디언트) */
+export function fillSectionBg(c: CanvasRenderingContext2D, lay: SectionLayout, w: number, h: number) {
+  if (lay.bgGrad) {
+    const g = gradPoints(lay.bgGrad.angle, w, h);
+    const grad = c.createLinearGradient(g.x1, g.y1, g.x2, g.y2);
+    grad.addColorStop(0, lay.bg);
+    grad.addColorStop(1, lay.bgGrad.color2);
+    c.fillStyle = grad;
+  } else {
+    c.fillStyle = lay.bg;
+  }
+  c.fillRect(0, 0, w, h);
+}
 
 export const imgCache = new Map<string, HTMLImageElement>();
 export function loadImage(src: string): Promise<HTMLImageElement> {
@@ -34,8 +48,7 @@ export async function renderPngCanvas(
   const c = canvas.getContext('2d')!;
   c.scale(scale, scale);
 
-  c.fillStyle = lay.bg;
-  c.fillRect(0, 0, width, h);
+  fillSectionBg(c, lay, width, h);
 
   for (const p of lay.prims) {
     if (p.type === 'rect') {

@@ -29,6 +29,8 @@ export function Step5Editor({ project }: { project: Project }) {
   const [runHl, setRunHl] = useState('#fff176');
   const [transLang, setTransLang] = useState<ContentLang>('en');
   const [transBusy, setTransBusy] = useState(false);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
   const imgInput = useRef<HTMLInputElement>(null);
   const fontInput = useRef<HTMLInputElement>(null);
 
@@ -48,11 +50,22 @@ export function Step5Editor({ project }: { project: Project }) {
     ...customFonts.map((f) => ({ family: f.family, label: `${f.family} (업로드)` })),
   ];
 
-  const patchBlock = (patch: Partial<Block>) => {
-    if (!block) return;
+  const patchBlockById = (bid: string, patch: Partial<Block>) =>
     updateSection(project.id, sec.id, {
-      blocks: sec.blocks.map((b) => (b.id === block.id ? { ...b, ...patch } : b)),
+      blocks: sec.blocks.map((b) => (b.id === bid ? { ...b, ...patch } : b)),
     });
+  const patchBlock = (patch: Partial<Block>) => {
+    if (block) patchBlockById(block.id, patch);
+  };
+
+  /** 섹션 드래그 순서 변경 */
+  const moveSection = (from: number, to: number) => {
+    if (from === to) return;
+    const next = [...project.sections];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    updateProject(project.id, { sections: next });
+    setSecIdx(to);
   };
 
   const applyFontToAll = (family: string) => {
@@ -190,16 +203,34 @@ export function Step5Editor({ project }: { project: Project }) {
 
           {tab === 'sections' && (
             <>
+              <p className="hint" style={{ margin: '0 0 6px' }}>꾹 눌러 드래그하면 순서가 바뀝니다</p>
               {project.sections.map((s, i) => (
                 <button
                   key={s.id}
-                  className={`ed-sec-item ${i === secIdx ? 'on' : ''}`}
+                  draggable
+                  className={`ed-sec-item ${i === secIdx ? 'on' : ''} ${dragIdx === i ? 'dragging' : ''} ${overIdx === i && dragIdx !== null && dragIdx !== i ? 'drag-over' : ''}`}
                   onClick={() => {
                     setSecIdx(i);
                     setSelBlock(null);
                   }}
+                  onDragStart={() => setDragIdx(i)}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setOverIdx(i);
+                  }}
+                  onDragLeave={() => setOverIdx((o) => (o === i ? null : o))}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (dragIdx !== null) moveSection(dragIdx, i);
+                    setDragIdx(null);
+                    setOverIdx(null);
+                  }}
+                  onDragEnd={() => {
+                    setDragIdx(null);
+                    setOverIdx(null);
+                  }}
                 >
-                  {i + 1}. {s.name}
+                  ⠿ {i + 1}. {s.name}
                 </button>
               ))}
               <div style={{ marginTop: 12, display: 'grid', gap: 6 }}>
@@ -238,6 +269,8 @@ export function Step5Editor({ project }: { project: Project }) {
                 width={width}
                 selectedBlock={selBlock}
                 onSelectBlock={setSelBlock}
+                zoom={scale}
+                onResizeBlock={(bid, h) => patchBlockById(bid, { heightPx: h })}
               />
             </div>
           </div>
@@ -245,12 +278,51 @@ export function Step5Editor({ project }: { project: Project }) {
 
         <aside className="ed-inspector card" style={{ padding: 18 }}>
           <strong style={{ fontSize: 14 }}>섹션: {sec.name}</strong>
-          <label className="label">섹션 배경색</label>
-          <input
-            type="color"
-            value={sec.bg}
-            onChange={(e) => updateSection(project.id, sec.id, { bg: e.target.value })}
-          />
+          <label className="label">섹션 배경</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="color"
+              value={sec.bg}
+              onChange={(e) => updateSection(project.id, sec.id, { bg: e.target.value })}
+            />
+            <label style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 13, fontWeight: 600 }}>
+              <input
+                type="checkbox"
+                checked={!!sec.bgGrad}
+                onChange={(e) =>
+                  updateSection(project.id, sec.id, {
+                    bgGrad: e.target.checked ? { color2: '#fde7d8', angle: 180 } : null,
+                  })
+                }
+              />
+              그라디언트
+            </label>
+            {sec.bgGrad && (
+              <input
+                type="color"
+                value={sec.bgGrad.color2}
+                onChange={(e) =>
+                  updateSection(project.id, sec.id, { bgGrad: { ...sec.bgGrad!, color2: e.target.value } })
+                }
+              />
+            )}
+          </div>
+          {sec.bgGrad && (
+            <>
+              <label className="label">그라디언트 방향 · {sec.bgGrad.angle}°</label>
+              <input
+                type="range"
+                min={0}
+                max={360}
+                step={15}
+                value={sec.bgGrad.angle}
+                style={{ width: '100%' }}
+                onChange={(e) =>
+                  updateSection(project.id, sec.id, { bgGrad: { ...sec.bgGrad!, angle: +e.target.value } })
+                }
+              />
+            </>
+          )}
 
           <label className="label">전체 폰트 한 번에 적용</label>
           <select className="input" value={project.globalFont} onChange={(e) => applyFontToAll(e.target.value)}>
@@ -456,16 +528,41 @@ export function Step5Editor({ project }: { project: Project }) {
           )}
 
           {block && (
-            <button
-              className="btn danger sm"
-              style={{ marginTop: 16 }}
-              onClick={() => {
-                updateSection(project.id, sec.id, { blocks: sec.blocks.filter((b) => b.id !== block.id) });
-                setSelBlock(null);
-              }}
-            >
-              블록 삭제
-            </button>
+            <>
+              <label className="label">
+                블록 높이 {block.heightPx ? `· ${block.heightPx}px` : '· 자동'}
+              </label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  className="input"
+                  style={{ width: 110, padding: '7px 10px' }}
+                  type="number"
+                  min={40}
+                  step={10}
+                  placeholder="자동"
+                  value={block.heightPx ?? ''}
+                  onChange={(e) =>
+                    patchBlock({ heightPx: e.target.value ? Math.max(40, +e.target.value) : null })
+                  }
+                />
+                <button className="btn subtle sm" onClick={() => patchBlock({ heightPx: null })}>
+                  자동으로
+                </button>
+              </div>
+              <p className="hint" style={{ marginTop: 6 }}>
+                캔버스에서 선택한 블록 하단의 주황 핸들을 아래로 드래그해도 됩니다 (상단 고정).
+              </p>
+              <button
+                className="btn danger sm"
+                style={{ marginTop: 16 }}
+                onClick={() => {
+                  updateSection(project.id, sec.id, { blocks: sec.blocks.filter((b) => b.id !== block.id) });
+                  setSelBlock(null);
+                }}
+              >
+                블록 삭제
+              </button>
+            </>
           )}
         </aside>
       </div>

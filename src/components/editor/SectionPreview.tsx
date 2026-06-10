@@ -11,12 +11,32 @@ export function SectionPreview({
   width,
   selectedBlock,
   onSelectBlock,
+  zoom = 1,
+  onResizeBlock,
 }: {
   section: Section;
   width: number;
   selectedBlock: string | null;
   onSelectBlock: (id: string) => void;
+  zoom?: number;
+  onResizeBlock?: (id: string, heightPx: number) => void;
 }) {
+  // 블록 하단 핸들 드래그 — 상단 고정, 아래로 늘어남
+  const startResize = (e: React.PointerEvent, blockId: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const blockEl = (e.currentTarget as HTMLElement).parentElement!;
+    const startH = blockEl.getBoundingClientRect().height / zoom;
+    const startY = e.clientY;
+    const move = (ev: PointerEvent) =>
+      onResizeBlock?.(blockId, Math.max(40, Math.round(startH + (ev.clientY - startY) / zoom)));
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
   // 연속된 동일 cardBg 블록을 한 카드로 묶음 (layout.ts와 동일 규칙)
   const segs: { cardBg: string | null; blocks: Block[] }[] = [];
   for (const b of section.blocks) {
@@ -26,8 +46,12 @@ export function SectionPreview({
     else segs.push({ cardBg: bg, blocks: [b] });
   }
 
+  const bgStyle = section.bgGrad
+    ? `linear-gradient(${section.bgGrad.angle}deg, ${section.bg}, ${section.bgGrad.color2})`
+    : section.bg;
+
   return (
-    <div style={{ width, background: section.bg, padding: '72px 64px' }}>
+    <div style={{ width, background: bgStyle, padding: '72px 64px' }}>
       {segs.map((seg, si) => {
         const inner = seg.blocks.map((b) => (
           <div
@@ -37,9 +61,16 @@ export function SectionPreview({
               e.stopPropagation();
               onSelectBlock(b.id);
             }}
-            style={{ marginBottom: 32 }}
+            style={{ marginBottom: 32, minHeight: b.heightPx ?? undefined }}
           >
             <BlockView b={b} />
+            {selectedBlock === b.id && onResizeBlock && (
+              <div
+                className="resize-handle"
+                title="아래로 드래그해 블록 높이 늘리기 (상단 고정)"
+                onPointerDown={(e) => startResize(e, b.id)}
+              />
+            )}
           </div>
         ));
         if (!seg.cardBg) return inner;

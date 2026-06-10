@@ -4,7 +4,7 @@ import { idbStorage } from './idbStorage';
 import { DEFAULT_FONT } from '../data/fonts';
 import { STRUCTURES } from '../data/structures';
 import type {
-  AiConfig, Category, CustomFont, Platform, Project, RefAsset, Section,
+  Account, AiConfig, Category, CustomFont, Platform, Project, RefAsset, Section,
 } from './types';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -34,6 +34,12 @@ interface AppState {
   // UI 언어 (한/영/일/중)
   lang: Lang;
   setLang: (l: Lang) => void;
+
+  // 계정 관리 (관리자가 생성, Gemini 키 사전 설정)
+  accounts: Account[];
+  addAccount: (a: Account) => void;
+  updateAccount: (id: string, patch: Partial<Account>) => void;
+  removeAccount: (id: string) => void;
 
   // 관리자 스타일 학습 데이터
   refs: RefAsset[];
@@ -68,6 +74,18 @@ export const useStore = create<AppState>()(
           set({ loggedIn: true, isAdmin: true, userId: id, view: 'dashboard' });
           return true;
         }
+        const acct = get().accounts.find((a) => a.id === id && a.pw === pw);
+        if (acct) {
+          set({
+            loggedIn: true,
+            isAdmin: false,
+            userId: id,
+            view: 'dashboard',
+            // 계정에 사전 설정된 Gemini 키 자동 적용
+            ai: acct.geminiKey ? { ...get().ai, geminiKey: acct.geminiKey } : get().ai,
+          });
+          return true;
+        }
         return false;
       },
       logout: () => set({ loggedIn: false, isAdmin: false, userId: '', view: 'login' }),
@@ -77,6 +95,12 @@ export const useStore = create<AppState>()(
 
       lang: 'ko',
       setLang: (lang) => set({ lang }),
+
+      accounts: [],
+      addAccount: (a) => set({ accounts: [...get().accounts, a] }),
+      updateAccount: (id, patch) =>
+        set({ accounts: get().accounts.map((a) => (a.id === id ? { ...a, ...patch } : a)) }),
+      removeAccount: (id) => set({ accounts: get().accounts.filter((a) => a.id !== id) }),
 
       refs: [],
       addRef: (r) => set({ refs: [...get().refs, { ...r, id: uid(), createdAt: Date.now() }] }),
@@ -137,6 +161,7 @@ export const useStore = create<AppState>()(
         customFonts: s.customFonts,
         ai: s.ai,
         lang: s.lang,
+        accounts: s.accounts,
       }),
     },
   ),

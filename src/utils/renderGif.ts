@@ -3,7 +3,7 @@ import type { Section } from '../state/types';
 import { layoutSection, setFont, type Prim } from './layout';
 import { animById } from '../data/typoAnimations';
 import { evalAnim } from './animEval';
-import { loadImage, imgCache } from './renderPng';
+import { loadImage, imgCache, fillSectionBg } from './renderPng';
 
 const LEAD_IN = 0.25; // 애니메이션 시작 전 정지 구간(초)
 const HOLD = 0.9; // 종료 후 정지 구간(초)
@@ -77,8 +77,7 @@ export async function renderGif(
   for (let f = 0; f < frameCount; f++) {
     const t = f / fps;
     c.setTransform(scale, 0, 0, scale, 0, 0);
-    c.fillStyle = lay.bg;
-    c.fillRect(0, 0, width, h);
+    fillSectionBg(c, lay, width, h);
 
     for (const p of lay.prims) {
       if (animSet.has(p)) continue; // 애니메이션 라인은 아래에서

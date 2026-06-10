@@ -1,5 +1,5 @@
 import type { Section } from '../state/types';
-import { layoutSection } from './layout';
+import { layoutSection, gradPoints } from './layout';
 import { TYPO_KEYFRAMES_CSS, animById } from '../data/typoAnimations';
 
 const esc = (s: string) =>
@@ -57,10 +57,20 @@ export function renderSvg(section: Section, width: number, animated: boolean): s
     ? `<style>${TYPO_KEYFRAMES_CSS} .ta { transform-box: fill-box; transform-origin: center; }</style>`
     : '';
 
+  const H = Math.ceil(lay.height);
+  let defs = '';
+  let bgFill = lay.bg;
+  if (lay.bgGrad) {
+    const g = gradPoints(lay.bgGrad.angle, lay.width, H);
+    defs = `<defs><linearGradient id="bgGrad" gradientUnits="userSpaceOnUse" x1="${g.x1.toFixed(1)}" y1="${g.y1.toFixed(1)}" x2="${g.x2.toFixed(1)}" y2="${g.y2.toFixed(1)}"><stop offset="0" stop-color="${lay.bg}"/><stop offset="1" stop-color="${lay.bgGrad.color2}"/></linearGradient></defs>`;
+    bgFill = 'url(#bgGrad)';
+  }
+
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${lay.width}" height="${Math.ceil(lay.height)}" viewBox="0 0 ${lay.width} ${Math.ceil(lay.height)}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${lay.width}" height="${H}" viewBox="0 0 ${lay.width} ${H}">`,
+    defs,
     style,
-    `<rect width="${lay.width}" height="${Math.ceil(lay.height)}" fill="${lay.bg}"/>`,
+    `<rect width="${lay.width}" height="${H}" fill="${bgFill}"/>`,
     ...parts,
     `</svg>`,
   ].join('\n');
