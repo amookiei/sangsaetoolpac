@@ -2,7 +2,7 @@ import type { Block, Section } from '../state/types';
 
 /**
  * 섹션 → 그리기 프리미티브 목록.
- * SVG 추출(피그마 편집용)과 PNG 추출(캔버스 래스터)이 같은 레이아웃을 공유한다.
+ * SVG 추출(피그마 편집용)·PNG 추출(캔버스 래스터)·GIF 추출이 같은 레이아웃을 공유한다.
  */
 export type Prim =
   | { type: 'rect'; x: number; y: number; w: number; h: number; color: string; rx: number }
@@ -79,75 +79,111 @@ function blockWeight(b: Block): number {
   return b.bold || b.kind === 'heading' ? 800 : 400;
 }
 
+/** 연속된 동일 cardBg 블록을 한 카드로 묶는다 (리뷰 카드·쿠폰 템플릿) */
+function cardSegments(blocks: Block[]): { cardBg: string | null; blocks: Block[] }[] {
+  const segs: { cardBg: string | null; blocks: Block[] }[] = [];
+  for (const b of blocks) {
+    const bg = b.cardBg ?? null;
+    const last = segs[segs.length - 1];
+    if (last && last.cardBg === bg && bg !== null) last.blocks.push(b);
+    else segs.push({ cardBg: bg, blocks: [b] });
+  }
+  return segs;
+}
+
 export function layoutSection(section: Section, width: number): SectionLayout {
   const c = ctx();
   const maxW = width - PAD_X * 2;
   const prims: Prim[] = [];
   let y = PAD_Y;
 
-  for (const b of section.blocks) {
-    if (b.kind === 'image') {
-      if (b.imageDataUrl && b.imgW > 0) {
-        const w = Math.min(maxW, b.imgW);
-        const h = (b.imgH / b.imgW) * w;
-        prims.push({ type: 'image', x: (width - w) / 2, y, w, h, dataUrl: b.imageDataUrl });
-        y += h + GAP;
-      } else {
-        const h = 300;
-        const descLines = wrapText(b.imageDesc || '이미지 영역', 'Pretendard Variable', 16, 400, maxW - 80);
-        prims.push({ type: 'placeholder', x: PAD_X, y, w: maxW, h, descLines });
-        y += h + GAP;
-      }
-      continue;
+  for (const seg of cardSegments(section.blocks)) {
+    let cardStartY = 0;
+    let cardInsertIdx = 0;
+    if (seg.cardBg) {
+      cardInsertIdx = prims.length;
+      cardStartY = y;
+      y += 28;
     }
 
-    const weight = blockWeight(b);
-    const lines = wrapText(b.text, b.font, b.fontSize, weight, maxW);
-    const lineH = Math.round(b.fontSize * 1.55);
-    setFont(c, b.font, b.fontSize, weight);
-    for (const line of lines) {
-      if (!line) {
-        y += lineH * 0.6;
+    for (const b of seg.blocks) {
+      if (b.kind === 'image') {
+        if (b.imageDataUrl && b.imgW > 0) {
+          const w = Math.min(maxW, b.imgW);
+          const h = (b.imgH / b.imgW) * w;
+          prims.push({ type: 'image', x: (width - w) / 2, y, w, h, dataUrl: b.imageDataUrl });
+          y += h + GAP;
+        } else {
+          const h = 300;
+          const descLines = wrapText(b.imageDesc || '이미지 영역', 'Pretendard Variable', 16, 400, maxW - 80);
+          prims.push({ type: 'placeholder', x: PAD_X, y, w: maxW, h, descLines });
+          y += h + GAP;
+        }
         continue;
       }
-      const tw = c.measureText(line).width;
-      const x = b.align === 'left' ? PAD_X : b.align === 'right' ? width - PAD_X - tw : (width - tw) / 2;
-      const baseline = y + b.fontSize;
-      if (b.highlight) {
-        prims.push({
-          type: 'rect',
-          x: x - 8,
-          y: y + b.fontSize * 0.08,
-          w: tw + 16,
-          h: b.fontSize * 1.3,
-          color: b.highlight,
-          rx: 4,
-        });
-      }
-      let charXs: number[] | null = null;
-      if (b.animation) {
-        charXs = [];
-        let cx = x;
-        for (const ch of line) {
-          charXs.push(cx);
-          cx += c.measureText(ch).width;
+
+      const weight = blockWeight(b);
+      const lines = wrapText(b.text, b.font, b.fontSize, weight, maxW);
+      const lineH = Math.round(b.fontSize * 1.55);
+      setFont(c, b.font, b.fontSize, weight);
+      for (const line of lines) {
+        if (!line) {
+          y += lineH * 0.6;
+          continue;
         }
+        const tw = c.measureText(line).width;
+        const x = b.align === 'left' ? PAD_X : b.align === 'right' ? width - PAD_X - tw : (width - tw) / 2;
+        const baseline = y + b.fontSize;
+        if (b.highlight) {
+          prims.push({
+            type: 'rect',
+            x: x - 8,
+            y: y + b.fontSize * 0.08,
+            w: tw + 16,
+            h: b.fontSize * 1.3,
+            color: b.highlight,
+            rx: 4,
+          });
+        }
+        let charXs: number[] | null = null;
+        if (b.animation) {
+          charXs = [];
+          let cx = x;
+          for (const ch of line) {
+            charXs.push(cx);
+            cx += c.measureText(ch).width;
+          }
+        }
+        prims.push({
+          type: 'line',
+          text: line,
+          x,
+          baseline,
+          font: b.font,
+          size: b.fontSize,
+          weight,
+          color: b.color,
+          anim: b.animation,
+          charXs,
+        });
+        y += lineH;
       }
-      prims.push({
-        type: 'line',
-        text: line,
-        x,
-        baseline,
-        font: b.font,
-        size: b.fontSize,
-        weight,
-        color: b.color,
-        anim: b.animation,
-        charXs,
-      });
-      y += lineH;
+      y += GAP;
     }
-    y += GAP;
+
+    if (seg.cardBg) {
+      const cardH = y - cardStartY - GAP + 28;
+      prims.splice(cardInsertIdx, 0, {
+        type: 'rect',
+        x: PAD_X - 24,
+        y: cardStartY,
+        w: maxW + 48,
+        h: cardH,
+        color: seg.cardBg,
+        rx: 18,
+      });
+      y += 16; // 카드 아래 추가 여백
+    }
   }
 
   return { width, height: Math.max(y - GAP + PAD_Y, 200), bg: section.bg, prims };

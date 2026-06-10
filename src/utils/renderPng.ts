@@ -1,8 +1,8 @@
 import type { Section } from '../state/types';
 import { layoutSection, setFont } from './layout';
 
-const imgCache = new Map<string, HTMLImageElement>();
-function loadImage(src: string): Promise<HTMLImageElement> {
+export const imgCache = new Map<string, HTMLImageElement>();
+export function loadImage(src: string): Promise<HTMLImageElement> {
   const hit = imgCache.get(src);
   if (hit) return Promise.resolve(hit);
   return new Promise((resolve, reject) => {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../state/store';
+import { Logo } from './Logo';
 
 export function Login() {
   const login = useStore((s) => s.login);
@@ -15,7 +16,9 @@ export function Login() {
   return (
     <div className="login-wrap">
       <form className="card login-card" onSubmit={submit}>
-        <div className="logo-mark">상</div>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+          <Logo size={60} />
+        </div>
         <div className="login-title">상세 스튜디오</div>
         <div className="login-sub">레퍼런스를 학습해 상세페이지를 단계별로 만들어 드려요</div>
         <input

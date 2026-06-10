@@ -2,22 +2,29 @@ import { useRef, useState } from 'react';
 import { useStore } from '../../state/store';
 import { BUILTIN_FONTS } from '../../data/fonts';
 import { PLATFORM_WIDTH } from '../../data/categories';
+import { applyStyleGuide, guideOf } from '../../data/styleGuide';
+import { TEMPLATE_GROUPS, TEXT_TEMPLATES, instantiate } from '../../data/textTemplates';
 import { readFileAsDataUrl, imageSize } from '../../utils/files';
 import { SectionPreview } from '../editor/SectionPreview';
 import { AnimPicker } from '../editor/AnimPicker';
+import { StyleGuideModal } from '../editor/StyleGuideModal';
 import type { Block, Project } from '../../state/types';
 
 const HIGHLIGHTS = ['#fff176', '#a5f3c4', '#bcd7ff', '#ffc9e0', '#e6d4ff', '#1a1a2e'];
+const CARD_BGS = ['#f6f7f9', '#fff4ec', '#fdf3f8', '#eef4ff', '#ff6b52', '#1a1a2e'];
 
-/** 5단계: Canva 스타일 디자인 에디터 — 폰트·색·배경·이미지·타이포 모션 편집 */
+/** 5단계: Canva 스타일 디자인 에디터 — 스타일 정립·텍스트 템플릿·폰트·모션 편집 */
 export function Step5Editor({ project }: { project: Project }) {
   const { updateProject, updateSection, customFonts, addCustomFont } = useStore();
   const [secIdx, setSecIdx] = useState(0);
   const [selBlock, setSelBlock] = useState<string | null>(null);
+  const [tab, setTab] = useState<'sections' | 'templates'>('sections');
+  const [showGuide, setShowGuide] = useState(false);
   const imgInput = useRef<HTMLInputElement>(null);
   const fontInput = useRef<HTMLInputElement>(null);
 
   const width = PLATFORM_WIDTH[project.platform];
+  const guide = guideOf(project);
   const sec = project.sections[Math.min(secIdx, project.sections.length - 1)];
   if (!sec) {
     return (
@@ -84,9 +91,18 @@ export function Step5Editor({ project }: { project: Project }) {
       align: 'center',
       bold: kind === 'heading',
       animation: null,
+      cardBg: null,
     };
     updateSection(project.id, sec.id, { blocks: [...sec.blocks, nb] });
     setSelBlock(nb.id);
+  };
+
+  const insertTemplate = (tplId: string) => {
+    const tpl = TEXT_TEMPLATES.find((t) => t.id === tplId);
+    if (!tpl) return;
+    const blocks = instantiate(tpl, project.globalFont, guide);
+    updateSection(project.id, sec.id, { blocks: [...sec.blocks, ...blocks] });
+    setSelBlock(blocks[blocks.length - 1].id);
   };
 
   const scale = Math.min(1, 620 / width);
@@ -95,27 +111,81 @@ export function Step5Editor({ project }: { project: Project }) {
     <>
       <div className="wz-head">
         <h2>5. 디자인 에디터</h2>
-        <span className="hint">블록을 클릭해 폰트·색·배경·모션을 조정하세요 (기준 폭 {width}px)</span>
+        <button className="btn ghost sm" onClick={() => setShowGuide(true)}>
+          🎨 디자인 스타일 정립
+        </button>
+        <span className="hint">블록을 클릭해 세부 조정 (기준 폭 {width}px)</span>
       </div>
+
+      {showGuide && (
+        <StyleGuideModal
+          initial={guide}
+          fontOptions={allFonts}
+          onClose={() => setShowGuide(false)}
+          onApply={(g) => {
+            updateProject(project.id, applyStyleGuide(project, g));
+            setShowGuide(false);
+          }}
+        />
+      )}
+
       <div className="editor">
         <aside className="ed-secs">
-          {project.sections.map((s, i) => (
+          <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
             <button
-              key={s.id}
-              className={`ed-sec-item ${i === secIdx ? 'on' : ''}`}
-              onClick={() => {
-                setSecIdx(i);
-                setSelBlock(null);
-              }}
+              className={`chip selectable ${tab === 'sections' ? 'on' : ''}`}
+              onClick={() => setTab('sections')}
             >
-              {i + 1}. {s.name}
+              섹션
             </button>
-          ))}
-          <div style={{ marginTop: 12, display: 'grid', gap: 6 }}>
-            <button className="btn ghost sm" onClick={() => addBlock('heading')}>+ 제목 블록</button>
-            <button className="btn ghost sm" onClick={() => addBlock('body')}>+ 본문 블록</button>
-            <button className="btn ghost sm" onClick={() => addBlock('image')}>+ 이미지 블록</button>
+            <button
+              className={`chip selectable ${tab === 'templates' ? 'on' : ''}`}
+              onClick={() => setTab('templates')}
+            >
+              T 텍스트
+            </button>
           </div>
+
+          {tab === 'sections' && (
+            <>
+              {project.sections.map((s, i) => (
+                <button
+                  key={s.id}
+                  className={`ed-sec-item ${i === secIdx ? 'on' : ''}`}
+                  onClick={() => {
+                    setSecIdx(i);
+                    setSelBlock(null);
+                  }}
+                >
+                  {i + 1}. {s.name}
+                </button>
+              ))}
+              <div style={{ marginTop: 12, display: 'grid', gap: 6 }}>
+                <button className="btn ghost sm" onClick={() => addBlock('heading')}>+ 제목 블록</button>
+                <button className="btn ghost sm" onClick={() => addBlock('body')}>+ 본문 블록</button>
+                <button className="btn ghost sm" onClick={() => addBlock('image')}>+ 이미지 블록</button>
+              </div>
+            </>
+          )}
+
+          {tab === 'templates' && (
+            <div className="tpl-list">
+              <p className="hint" style={{ marginTop: 0 }}>
+                클릭하면 현재 섹션 「{sec.name}」 끝에 추가됩니다.
+              </p>
+              {TEMPLATE_GROUPS.map((g) => (
+                <div key={g}>
+                  <div className="anim-group-label">{g}</div>
+                  {TEXT_TEMPLATES.filter((t) => t.group === g).map((t) => (
+                    <button key={t.id} className="tpl-item" onClick={() => insertTemplate(t.id)}>
+                      <span className="tpl-label">{t.label}</span>
+                      <span className="tpl-preview">{t.preview}</span>
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
         </aside>
 
         <div className="ed-canvas-wrap" onClick={() => setSelBlock(null)}>
@@ -174,17 +244,30 @@ export function Step5Editor({ project }: { project: Project }) {
                 value={block.text}
                 onChange={(e) => patchBlock({ text: e.target.value })}
               />
+              <button
+                className="btn ghost sm"
+                style={{ marginTop: 8 }}
+                onClick={() =>
+                  patchBlock({
+                    color: guide.emphasisColor,
+                    highlight: guide.emphasisHighlight,
+                    bold: true,
+                  })
+                }
+              >
+                ✨ 강조 스타일 적용
+              </button>
               <label className="label">폰트</label>
               <select className="input" value={block.font} onChange={(e) => patchBlock({ font: e.target.value })}>
                 {allFonts.map((f) => (
                   <option key={f.family} value={f.family}>{f.label}</option>
                 ))}
               </select>
-              <label className="label">크기 · {block.fontSize}px</label>
+              <label className="label">크기 · {block.fontSize}px (최대 200px)</label>
               <input
                 type="range"
                 min={12}
-                max={72}
+                max={200}
                 value={block.fontSize}
                 style={{ width: '100%' }}
                 onChange={(e) => patchBlock({ fontSize: +e.target.value })}
@@ -193,7 +276,7 @@ export function Step5Editor({ project }: { project: Project }) {
                 <label className="label" style={{ margin: 0 }}>글자색</label>
                 <input type="color" value={block.color} onChange={(e) => patchBlock({ color: e.target.value })} />
                 <button
-                  className={`chip selectable sm ${block.bold ? 'on' : ''}`}
+                  className={`chip selectable ${block.bold ? 'on' : ''}`}
                   onClick={() => patchBlock({ bold: !block.bold })}
                 >
                   B
@@ -220,6 +303,22 @@ export function Step5Editor({ project }: { project: Project }) {
                     style={{
                       width: 26, height: 26, borderRadius: 8, background: h, cursor: 'pointer',
                       border: block.highlight === h ? '2.5px solid var(--violet)' : '1.5px solid var(--line)',
+                    }}
+                  />
+                ))}
+              </div>
+              <label className="label">카드 배경 (블록 전체 박스)</label>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button className={`chip selectable ${!block.cardBg ? 'on' : ''}`} onClick={() => patchBlock({ cardBg: null })}>
+                  없음
+                </button>
+                {CARD_BGS.map((h) => (
+                  <button
+                    key={h}
+                    onClick={() => patchBlock({ cardBg: h })}
+                    style={{
+                      width: 26, height: 26, borderRadius: 8, background: h, cursor: 'pointer',
+                      border: block.cardBg === h ? '2.5px solid var(--violet)' : '1.5px solid var(--line)',
                     }}
                   />
                 ))}

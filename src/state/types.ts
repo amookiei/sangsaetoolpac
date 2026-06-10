@@ -40,6 +40,22 @@ export interface Block {
   align: 'left' | 'center' | 'right';
   bold: boolean;
   animation: string | null; // 타이포 애니메이션 프리셋 id
+  cardBg?: string | null; // 블록 전체 카드 배경 (리뷰 카드·쿠폰 등 템플릿용)
+}
+
+/** 디자인 스타일 가이드 — 에디터에서 정립 후 전체 섹션에 일괄 적용 */
+export interface StyleGuide {
+  headingFont: string;
+  headingColor: string;
+  headingBold: boolean;
+  emphasisColor: string; // 강조 문구 색
+  emphasisHighlight: string | null; // 강조 문구 형광펜 배경
+  bodyFont: string;
+  bodyColor: string;
+  bodySize: number;
+  numberColor: string; // 숫자/지표 강조 색
+  pageBg: string; // 섹션 기본 배경
+  cardBg: string; // 카드 블록 기본 배경
 }
 
 export interface Section {
@@ -71,6 +87,7 @@ export interface Project {
   hookSelected: string;
   sections: Section[];
   globalFont: string;
+  styleGuide?: StyleGuide; // 미설정(기존 프로젝트)이면 기본값 사용
 }
 
 export interface CustomFont {

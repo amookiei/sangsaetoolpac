@@ -1,11 +1,12 @@
 import { useStore } from '../state/store';
+import { Logo } from './Logo';
 
 export function TopBar() {
   const { view, setView, isAdmin, logout, userId } = useStore();
   return (
     <header className="topbar">
       <div className="brand">
-        <div className="logo-mark">상</div>
+        <Logo size={34} />
         상세 스튜디오
       </div>
       <button

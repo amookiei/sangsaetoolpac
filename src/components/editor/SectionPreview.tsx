@@ -3,7 +3,7 @@ import { TypoText } from './TypoText';
 
 /**
  * 섹션 라이브 미리보기 (HTML 렌더 — 애니메이션 실시간 재생).
- * 추출 시에는 동일 데이터를 layout.ts 기반 SVG/PNG 렌더러가 그린다.
+ * 추출 시에는 동일 데이터를 layout.ts 기반 SVG/PNG/GIF 렌더러가 그린다.
  */
 export function SectionPreview({
   section,
@@ -16,21 +16,46 @@ export function SectionPreview({
   selectedBlock: string | null;
   onSelectBlock: (id: string) => void;
 }) {
+  // 연속된 동일 cardBg 블록을 한 카드로 묶음 (layout.ts와 동일 규칙)
+  const segs: { cardBg: string | null; blocks: Block[] }[] = [];
+  for (const b of section.blocks) {
+    const bg = b.cardBg ?? null;
+    const last = segs[segs.length - 1];
+    if (last && last.cardBg === bg && bg !== null) last.blocks.push(b);
+    else segs.push({ cardBg: bg, blocks: [b] });
+  }
+
   return (
     <div style={{ width, background: section.bg, padding: '72px 64px' }}>
-      {section.blocks.map((b) => (
-        <div
-          key={b.id}
-          className={`ed-block ${selectedBlock === b.id ? 'sel' : ''}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelectBlock(b.id);
-          }}
-          style={{ marginBottom: 32 }}
-        >
-          <BlockView b={b} />
-        </div>
-      ))}
+      {segs.map((seg, si) => {
+        const inner = seg.blocks.map((b) => (
+          <div
+            key={b.id}
+            className={`ed-block ${selectedBlock === b.id ? 'sel' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectBlock(b.id);
+            }}
+            style={{ marginBottom: 32 }}
+          >
+            <BlockView b={b} />
+          </div>
+        ));
+        if (!seg.cardBg) return inner;
+        return (
+          <div
+            key={`card-${si}`}
+            style={{
+              background: seg.cardBg,
+              borderRadius: 18,
+              padding: '28px 24px 0',
+              margin: '0 -24px 48px',
+            }}
+          >
+            {inner}
+          </div>
+        );
+      })}
     </div>
   );
 }
