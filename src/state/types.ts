@@ -1,0 +1,88 @@
+export type Platform = 'smartstore' | 'wadiz';
+export type Category = 'food' | 'tech' | 'life' | 'beauty' | 'serviceai';
+
+/** 관리자 스타일 학습용 레퍼런스 자산 (SVG/PNG) */
+export interface RefAsset {
+  id: string;
+  platform: Platform;
+  category: Category;
+  name: string;
+  dataUrl: string;
+  mime: string;
+  note: string;
+  createdAt: number;
+}
+
+/** 옴니버스 자산 — 제품/패키지/캐릭터/인물이 항상 일관되게 나오도록 하는 앵커 */
+export type OmniRole = 'product' | 'package' | 'character' | 'model' | 'logo';
+export interface OmniAsset {
+  id: string;
+  name: string;
+  role: OmniRole;
+  dataUrl: string | null;
+  description: string; // 모든 이미지 생성 프롬프트에 자동 삽입되는 일관성 설명
+}
+
+export type BlockKind = 'heading' | 'body' | 'image';
+
+export interface Block {
+  id: string;
+  kind: BlockKind;
+  text: string;
+  imageDesc: string; // 파란 글씨로 표시되는 이미지 묘사 (기획안 단계)
+  imageDataUrl: string | null;
+  imgW: number;
+  imgH: number;
+  font: string;
+  fontSize: number;
+  color: string;
+  highlight: string | null; // 폰트 배경(형광펜) 색
+  align: 'left' | 'center' | 'right';
+  bold: boolean;
+  animation: string | null; // 타이포 애니메이션 프리셋 id
+}
+
+export interface Section {
+  id: string;
+  name: string;
+  purpose: string;
+  bg: string;
+  blocks: Block[];
+}
+
+export interface StructureItem {
+  name: string;
+  purpose: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  platform: Platform;
+  category: Category;
+  createdAt: number;
+  step: number; // 1~7
+  briefText: string;
+  briefFiles: { name: string; size: number }[];
+  keywords: string[];
+  omni: OmniAsset[];
+  structure: StructureItem[];
+  hookOptions: string[];
+  hookSelected: string;
+  sections: Section[];
+  globalFont: string;
+}
+
+export interface CustomFont {
+  id: string;
+  family: string;
+  dataUrl: string;
+}
+
+export type AiProvider = 'gemini' | 'openai';
+export interface AiConfig {
+  provider: AiProvider;
+  geminiKey: string;
+  openaiKey: string;
+  freeMode: boolean; // 무료 테스트 모드 (로컬 플레이스홀더 생성)
+}
