@@ -26,6 +26,10 @@ interface AppState {
   userId: string;
   login: (id: string, pw: string) => boolean;
   logout: () => void;
+  /** Supabase 클라우드 로그인 성공 시 호출 */
+  setAuth: (auth: { userId: string; isAdmin: boolean }) => void;
+  /** 클라우드 pull 결과로 로컬 데이터 교체 */
+  hydrateCloud: (projects: Project[], refs: RefAsset[]) => void;
 
   // routing
   view: View;
@@ -89,6 +93,9 @@ export const useStore = create<AppState>()(
         return false;
       },
       logout: () => set({ loggedIn: false, isAdmin: false, userId: '', view: 'login' }),
+      setAuth: ({ userId, isAdmin }) =>
+        set({ loggedIn: true, isAdmin, userId, view: 'dashboard' }),
+      hydrateCloud: (projects, refs) => set({ projects, refs }),
 
       view: 'login',
       setView: (view) => set({ view }),

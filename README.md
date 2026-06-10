@@ -33,6 +33,20 @@ npm run build    # 프로덕션 빌드
 5개 카테고리 버킷에 레퍼런스 SVG/PNG 업로드 + 스타일 메모. 구조 추천과 AI 프롬프트에
 반영됩니다. (임베딩 검색 기반 고도화 로드맵: docs/DATABASE.md 6장)
 
+## 외부 연동 (환경변수)
+
+`.env.example` 참고. 모두 선택사항 — 없으면 로컬 모드로 동작합니다.
+
+| 변수 | 용도 | 발급처 |
+|---|---|---|
+| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | 외부 DB + 이메일 로그인 (클라우드 모드) | supabase.com → Settings → API |
+| `VITE_ADMIN_EMAIL` | 클라우드 모드 관리자 이메일 | — |
+| `VITE_GEMINI_KEY` | AI 이미지 생성·본문 번역 기본 키 | aistudio.google.com (무료) |
+| `OPENAI_API_KEY` | gpt-image-1 서버 프록시(`/api/openai-image`) | platform.openai.com (유료) |
+
+Supabase 테이블 생성: `supabase/schema.sql`을 SQL Editor에서 실행 → 상세 절차는
+[docs/DATABASE.md](docs/DATABASE.md) 체크리스트 참고.
+
 ## 배포 (Vercel)
 
 `vercel.json`이 포함되어 있어 별도 설정 없이 배포됩니다.

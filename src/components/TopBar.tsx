@@ -1,4 +1,5 @@
 import { useStore, type Lang } from '../state/store';
+import { cloudLogout } from '../lib/supabaseSync';
 import { useT, LANGS } from '../i18n';
 import { Logo } from './Logo';
 
@@ -37,7 +38,13 @@ export function TopBar() {
         ))}
       </select>
       <span className="hint">{userId}</span>
-      <button className="btn subtle sm" onClick={logout}>
+      <button
+        className="btn subtle sm"
+        onClick={() => {
+          logout();
+          void cloudLogout();
+        }}
+      >
         {t('로그아웃')}
       </button>
     </header>

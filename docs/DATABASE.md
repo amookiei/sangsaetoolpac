@@ -1,8 +1,40 @@
-# 외부 DB 연동 가이드 (Supabase 권장)
+# 외부 DB 연동 가이드 (Supabase)
 
-현재 앱은 **IndexedDB(브라우저 내장 DB)** 에 모든 데이터를 저장합니다.
-(`src/state/idbStorage.ts`) — 설치 없이 바로 쓸 수 있지만, 기기 간 공유가 안 되고
-브라우저 데이터를 지우면 사라집니다. 팀과 함께 쓰려면 외부 DB가 필요합니다.
+> ✅ **연동 코드는 이미 앱에 들어 있습니다** (`src/lib/supabaseSync.ts`).
+> 아래 체크리스트대로 Supabase 프로젝트를 만들고 Vercel 환경변수만 넣으면
+> 자동으로 클라우드 모드로 전환됩니다. 환경변수가 없으면 지금처럼
+> 로컬 모드(IndexedDB + adminadmin)로 동작합니다.
+
+## ⚡ 연동 체크리스트 (10분)
+
+1. <https://supabase.com> 가입 → **New Project** 생성
+2. **SQL Editor** → 저장소의 `supabase/schema.sql` 내용 붙여넣고 Run
+   (마지막 두 줄의 `admin@example.com`을 실제 관리자 이메일로 교체!)
+3. **Authentication → Users → Add user**로 관리자 계정과 팀원 계정 생성
+   (이메일 + 비밀번호, Auto confirm 체크)
+4. **Settings → API**에서 `Project URL`, `anon public key` 복사
+5. **Vercel 대시보드 → 프로젝트 → Settings → Environment Variables**에 추가:
+   | 변수 | 값 |
+   |---|---|
+   | `VITE_SUPABASE_URL` | 4번의 Project URL |
+   | `VITE_SUPABASE_ANON_KEY` | 4번의 anon key |
+   | `VITE_ADMIN_EMAIL` | 관리자 이메일 (스타일 학습 권한) |
+   | `VITE_GEMINI_KEY` | (선택) Gemini 키 — 전 사용자 기본 적용 |
+   | `OPENAI_API_KEY` | (선택) OpenAI 프록시용, 서버 전용 |
+6. **Deployments → 최신 배포 → Redeploy** (환경변수 반영)
+
+끝. 로그인 화면이 "☁ Supabase 클라우드 모드"로 바뀌고, 이메일/비밀번호 로그인 후
+프로젝트·레퍼런스가 자동 pull/push 동기화됩니다 (1.5초 디바운스 upsert).
+
+## 동작 방식
+
+- 로그인 → `cloudLogin()` (Supabase Auth) → `initialSync()`가 클라우드 데이터를
+  내려받고, 로컬에만 있던 프로젝트는 올려서 병합
+- 이후 모든 변경은 zustand 구독으로 감지해 변경된 프로젝트만 디바운스 upsert
+- 레퍼런스(refs)는 관리자 계정일 때만 push (RLS로 서버에서도 강제)
+- IndexedDB는 오프라인 캐시로 계속 동작
+
+## 배경 설명
 
 ## 왜 Supabase인가
 

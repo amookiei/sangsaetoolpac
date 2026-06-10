@@ -9,6 +9,10 @@ import { CATEGORY_PALETTE, CATEGORY_LABEL, PLATFORM_LABEL } from '../data/catego
  * - OpenAI(gpt-image-1): 브라우저 직접 호출은 CORS로 막힐 수 있음 → docs/AI_IMAGE_API.md 참고
  */
 
+/** Vercel 환경변수 VITE_GEMINI_KEY가 있으면 키 미입력 시 기본값으로 사용 */
+export const envGeminiKey = (import.meta.env.VITE_GEMINI_KEY as string | undefined) ?? '';
+export const effectiveGeminiKey = (ai: AiConfig) => ai.geminiKey || envGeminiKey;
+
 /** 옴니버스 자산 설명을 항상 프롬프트 앞에 고정 삽입해 일관성을 강제한다 */
 export function buildPrompt(
   imageDesc: string,
@@ -87,13 +91,28 @@ async function generateGemini(prompt: string, omni: OmniAsset[], key: string): P
   return `data:${img.inlineData.mimeType ?? 'image/png'};base64,${img.inlineData.data}`;
 }
 
-/** OpenAI gpt-image-1 호출 */
+/**
+ * OpenAI gpt-image-1 호출.
+ * 키를 직접 입력했으면 브라우저에서 직접 호출(CORS 차단 가능),
+ * 아니면 Vercel 서버리스 프록시(/api/openai-image, OPENAI_API_KEY 환경변수)를 사용.
+ */
 async function generateOpenAI(prompt: string, key: string): Promise<string> {
-  const res = await fetch('https://api.openai.com/v1/images/generations', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-    body: JSON.stringify({ model: 'gpt-image-1', prompt, size: '1024x1024' }),
-  });
+  const res = key
+    ? await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify({ model: 'gpt-image-1', prompt, size: '1024x1024' }),
+      })
+    : await fetch('/api/openai-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, size: '1024x1024' }),
+      });
+  if (res.status === 404 && !key) {
+    throw new Error(
+      'OpenAI 프록시는 Vercel 배포에서만 동작합니다 — Vercel 환경변수 OPENAI_API_KEY를 설정하거나 키를 직접 입력하세요.',
+    );
+  }
   if (!res.ok) throw new Error(`OpenAI API 오류 (${res.status}): ${(await res.text()).slice(0, 200)}`);
   const json = await res.json();
   const b64 = json.data?.[0]?.b64_json;
@@ -111,9 +130,9 @@ export async function generateImage(
   if (ai.freeMode) return generatePlaceholder(desc, category);
   const prompt = buildPrompt(desc, omni, platform, category);
   if (ai.provider === 'gemini') {
-    if (!ai.geminiKey) throw new Error('Gemini API 키를 입력해 주세요.');
-    return generateGemini(prompt, omni, ai.geminiKey);
+    const key = effectiveGeminiKey(ai);
+    if (!key) throw new Error('Gemini API 키를 입력해 주세요 (또는 Vercel에 VITE_GEMINI_KEY 설정).');
+    return generateGemini(prompt, omni, key);
   }
-  if (!ai.openaiKey) throw new Error('OpenAI API 키를 입력해 주세요.');
   return generateOpenAI(prompt, ai.openaiKey);
 }
