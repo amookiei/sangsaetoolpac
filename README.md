@@ -33,6 +33,18 @@ npm run build    # 프로덕션 빌드
 5개 카테고리 버킷에 레퍼런스 SVG/PNG 업로드 + 스타일 메모. 구조 추천과 AI 프롬프트에
 반영됩니다. (임베딩 검색 기반 고도화 로드맵: docs/DATABASE.md 6장)
 
+## 배포 (Vercel)
+
+`vercel.json`이 포함되어 있어 별도 설정 없이 배포됩니다.
+
+1. <https://vercel.com> → **Add New → Project** → GitHub에서 `sangsaetoolpac` 저장소 Import
+2. Framework가 **Vite**로 자동 인식됨 (Build: `npm run build`, Output: `dist`) → **Deploy**
+3. 이후 `main`에 머지될 때마다 자동 배포, PR 브랜치는 Preview URL 생성
+
+추후 Supabase 연동 시 Vercel 대시보드 → Settings → Environment Variables에
+`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`를 추가하세요.
+Gemini/OpenAI 키는 앱 안에서 입력하므로 환경변수가 필요 없습니다.
+
 ## 문서
 
 - [docs/DATABASE.md](docs/DATABASE.md) — 외부 DB(Supabase) 연동: 스키마 SQL, Storage, Auth 교체, RLS
