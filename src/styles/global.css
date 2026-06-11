@@ -226,6 +226,11 @@ textarea.img-desc { resize: vertical; outline: none; min-height: 60px; }
   color: var(--ink-2); margin-bottom: 6px;
 }
 .ed-sec-item.on { border-color: var(--accent); color: var(--accent-deep); background: var(--accent-soft); }
+.ed-sec-item { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.ed-sec-item .sec-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-sec-item .sec-actions { display: none; gap: 3px; flex-shrink: 0; }
+.ed-sec-item:hover .sec-actions, .ed-sec-item.on .sec-actions { display: inline-flex; }
+.ed-sec-item .sec-actions .icon-btn { width: 22px; height: 22px; font-size: 11px; }
 .ed-canvas-wrap { flex: 1; min-width: 0; display: flex; justify-content: center; }
 .ed-canvas {
   background: #fff; box-shadow: var(--shadow-lg); border: 1px solid var(--line);
