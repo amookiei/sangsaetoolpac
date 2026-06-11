@@ -8,6 +8,7 @@ import { readFileAsDataUrl, imageSize } from '../../utils/files';
 import { addRun, clearRuns, clampRuns } from '../../utils/richText';
 import { translateSections, CONTENT_LANGS, type ContentLang } from '../../utils/translate';
 import { useT } from '../../i18n';
+import { CLIP_ANIMS, effectiveUnit } from '../../data/typoAnimations';
 import { SectionPreview } from '../editor/SectionPreview';
 import { AnimPicker } from '../editor/AnimPicker';
 import { StyleGuideModal } from '../editor/StyleGuideModal';
@@ -97,22 +98,24 @@ export function Step5Editor({ project }: { project: Project }) {
     patchBlock({ imageDataUrl: dataUrl, imgW: w, imgH: h });
   };
 
-  const addBlock = (kind: Block['kind']) => {
+  const addBlock = (kind: Block['kind'], asNumber = false) => {
     const nb: Block = {
       id: Math.random().toString(36).slice(2, 10),
       kind,
-      text: kind === 'heading' ? '새 제목' : kind === 'body' ? '새 본문 텍스트' : '',
+      text: asNumber ? '01' : kind === 'heading' ? '새 제목' : kind === 'body' ? '새 본문 텍스트' : '',
       imageDesc: kind === 'image' ? '[이미지] 직접 업로드하거나 6단계에서 AI 생성' : '',
       imageDataUrl: null,
       imgW: 0,
       imgH: 0,
       font: project.globalFont,
-      fontSize: kind === 'heading' ? 32 : 20,
-      color: '#222222',
+      fontSize: asNumber ? guide.numberSize : kind === 'heading' ? 32 : 20,
+      color: asNumber ? guide.numberColor : '#222222',
       highlight: null,
       align: 'center',
-      bold: kind === 'heading',
+      bold: kind === 'heading' || asNumber,
       animation: null,
+      numberShape: asNumber ? guide.numberShape : null,
+      numberShapeColor: asNumber ? guide.numberShapeColor : undefined,
       cardBg: null,
     };
     updateSection(project.id, sec.id, { blocks: [...sec.blocks, nb] });
@@ -233,6 +236,7 @@ export function Step5Editor({ project }: { project: Project }) {
                 <button className="btn ghost sm" onClick={() => addBlock('heading')}>+ 제목 블록</button>
                 <button className="btn ghost sm" onClick={() => addBlock('body')}>+ 본문 블록</button>
                 <button className="btn ghost sm" onClick={() => addBlock('image')}>+ 이미지 블록</button>
+                <button className="btn ghost sm" onClick={() => addBlock('heading', true)}>+ 숫자 뱃지 블록</button>
               </div>
             </>
           )}
@@ -267,6 +271,7 @@ export function Step5Editor({ project }: { project: Project }) {
                 onSelectBlock={setSelBlock}
                 zoom={scale}
                 onResizeBlock={(bid, h) => patchBlockById(bid, { heightPx: h })}
+                onResizeTop={(bid, p) => patchBlockById(bid, { padTop: p || null })}
               />
             </div>
           </div>
@@ -485,8 +490,61 @@ export function Step5Editor({ project }: { project: Project }) {
                   />
                 ))}
               </div>
+              <label className="label">숫자 뱃지 모양</label>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                <button className={`chip selectable ${!block.numberShape ? 'on' : ''}`} onClick={() => patchBlock({ numberShape: null })}>
+                  없음
+                </button>
+                {(['circle', 'triangle', 'square', 'underline'] as const).map((s) => (
+                  <button
+                    key={s}
+                    className={`chip selectable ${block.numberShape === s ? 'on' : ''}`}
+                    onClick={() => patchBlock({ numberShape: s, numberShapeColor: block.numberShapeColor ?? guide.numberShapeColor })}
+                  >
+                    {s === 'circle' ? '⬤' : s === 'triangle' ? '▲' : s === 'square' ? '■' : '밑줄'}
+                  </button>
+                ))}
+                {block.numberShape && (
+                  <input
+                    type="color"
+                    title="도형 색"
+                    value={block.numberShapeColor ?? guide.numberShapeColor}
+                    onChange={(e) => patchBlock({ numberShapeColor: e.target.value })}
+                  />
+                )}
+              </div>
               <label className="label">타이포 애니메이션 (와디즈 GIF 스타일)</label>
               <AnimPicker value={block.animation} onChange={(id) => patchBlock({ animation: id })} />
+              {block.animation && (
+                <>
+                  <label className="label">애니메이션 단위</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {CLIP_ANIMS.has(block.animation) ? (
+                      <span className="hint">이 프리셋은 줄별로만 재생됩니다</span>
+                    ) : (
+                      (['char', 'line'] as const).map((u) => (
+                        <button
+                          key={u}
+                          className={`chip selectable ${effectiveUnit(block.animation, block.animUnit) === u ? 'on' : ''}`}
+                          onClick={() => patchBlock({ animUnit: u })}
+                        >
+                          {u === 'char' ? '글자별 (위에서부터)' : '줄별 (순서대로)'}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                  <label className="label">속도 · {(block.animSpeed ?? 1).toFixed(2)}×</label>
+                  <input
+                    type="range"
+                    min={0.25}
+                    max={3}
+                    step={0.25}
+                    value={block.animSpeed ?? 1}
+                    style={{ width: '100%' }}
+                    onChange={(e) => patchBlock({ animSpeed: +e.target.value })}
+                  />
+                </>
+              )}
             </>
           )}
 
@@ -520,33 +578,68 @@ export function Step5Editor({ project }: { project: Project }) {
               <p className="hint" style={{ marginTop: 10 }}>
                 비워두면 6단계에서 파란 묘사를 프롬프트로 AI 이미지를 생성할 수 있어요.
               </p>
+              <label className="label">이미지 애니메이션</label>
+              <AnimPicker
+                blockOnly
+                value={block.animation}
+                onChange={(id) => patchBlock({ animation: id })}
+              />
+              {block.animation && (
+                <>
+                  <label className="label">속도 · {(block.animSpeed ?? 1).toFixed(2)}×</label>
+                  <input
+                    type="range"
+                    min={0.25}
+                    max={3}
+                    step={0.25}
+                    value={block.animSpeed ?? 1}
+                    style={{ width: '100%' }}
+                    onChange={(e) => patchBlock({ animSpeed: +e.target.value })}
+                  />
+                </>
+              )}
             </>
           )}
 
           {block && (
             <>
               <label className="label">
-                블록 높이 {block.heightPx ? `· ${block.heightPx}px` : '· 자동'}
+                블록 높이 {block.heightPx ? `· ${block.heightPx}px` : '· 자동'} / 위 여백 {block.padTop ? `${block.padTop}px` : '0'}
               </label>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <input
                   className="input"
-                  style={{ width: 110, padding: '7px 10px' }}
+                  style={{ width: 96, padding: '7px 10px' }}
                   type="number"
                   min={40}
                   step={10}
-                  placeholder="자동"
+                  placeholder="높이"
+                  title="블록 높이 (px)"
                   value={block.heightPx ?? ''}
                   onChange={(e) =>
                     patchBlock({ heightPx: e.target.value ? Math.max(40, +e.target.value) : null })
                   }
                 />
-                <button className="btn subtle sm" onClick={() => patchBlock({ heightPx: null })}>
-                  자동으로
+                <input
+                  className="input"
+                  style={{ width: 96, padding: '7px 10px' }}
+                  type="number"
+                  min={0}
+                  step={10}
+                  placeholder="위 여백"
+                  title="블록 위 여백 (px)"
+                  value={block.padTop ?? ''}
+                  onChange={(e) =>
+                    patchBlock({ padTop: e.target.value ? Math.max(0, +e.target.value) : null })
+                  }
+                />
+                <button className="btn subtle sm" onClick={() => patchBlock({ heightPx: null, padTop: null })}>
+                  초기화
                 </button>
               </div>
               <p className="hint" style={{ marginTop: 6 }}>
-                캔버스에서 선택한 블록 하단의 주황 핸들을 아래로 드래그해도 됩니다 (상단 고정).
+                캔버스에서 선택한 블록의 위/아래 주황 핸들을 드래그해도 됩니다.
+                위 핸들 = 상단 여백, 아래 핸들 = 블록 높이(상단 고정).
               </p>
               <button
                 className="btn danger sm"

@@ -1,6 +1,7 @@
 import type { Block, Section } from '../../state/types';
-import { TypoText } from './TypoText';
+import { TypoText, AnimBox } from './TypoText';
 import { segmentLine } from '../../utils/richText';
+import { effectiveUnit } from '../../data/typoAnimations';
 
 /**
  * 섹션 라이브 미리보기 (HTML 렌더 — 애니메이션 실시간 재생).
@@ -13,6 +14,7 @@ export function SectionPreview({
   onSelectBlock,
   zoom = 1,
   onResizeBlock,
+  onResizeTop,
 }: {
   section: Section;
   width: number;
@@ -20,6 +22,7 @@ export function SectionPreview({
   onSelectBlock: (id: string) => void;
   zoom?: number;
   onResizeBlock?: (id: string, heightPx: number) => void;
+  onResizeTop?: (id: string, padTop: number) => void;
 }) {
   // 블록 하단 핸들 드래그 — 상단 고정, 아래로 늘어남
   const startResize = (e: React.PointerEvent, blockId: string) => {
@@ -37,6 +40,23 @@ export function SectionPreview({
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
   };
+
+  // 블록 상단 핸들 드래그 — 위쪽 여백(padTop) 조절
+  const startResizeTop = (e: React.PointerEvent, b: Block) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const startPad = b.padTop ?? 0;
+    const startY = e.clientY;
+    const move = (ev: PointerEvent) =>
+      onResizeTop?.(b.id, Math.max(0, Math.round(startPad + (ev.clientY - startY) / zoom)));
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
   // 연속된 동일 cardBg 블록을 한 카드로 묶음 (layout.ts와 동일 규칙)
   const segs: { cardBg: string | null; blocks: Block[] }[] = [];
   for (const b of section.blocks) {
@@ -61,8 +81,15 @@ export function SectionPreview({
               e.stopPropagation();
               onSelectBlock(b.id);
             }}
-            style={{ marginBottom: 32, minHeight: b.heightPx ?? undefined }}
+            style={{ marginBottom: 32, minHeight: b.heightPx ?? undefined, paddingTop: b.padTop ?? undefined }}
           >
+            {selectedBlock === b.id && onResizeTop && (
+              <div
+                className="resize-handle top"
+                title="아래로 드래그해 블록 위 여백 늘리기"
+                onPointerDown={(e) => startResizeTop(e, b)}
+              />
+            )}
             <BlockView b={b} />
             {selectedBlock === b.id && onResizeBlock && (
               <div
@@ -105,7 +132,11 @@ function splitWithOffsets(text: string): { line: string; startIdx: number }[] {
 function BlockView({ b }: { b: Block }) {
   if (b.kind === 'image') {
     if (b.imageDataUrl) {
-      return <img src={b.imageDataUrl} style={{ width: '100%', borderRadius: 2, display: 'block' }} />;
+      return (
+        <AnimBox animId={b.animation} speed={b.animSpeed ?? 1}>
+          <img src={b.imageDataUrl} style={{ width: '100%', borderRadius: 2, display: 'block' }} />
+        </AnimBox>
+      );
     }
     return (
       <div
@@ -116,7 +147,55 @@ function BlockView({ b }: { b: Block }) {
       </div>
     );
   }
+
   const weight = b.bold || b.kind === 'heading' ? 800 : 400;
+  const unit = effectiveUnit(b.animation, b.animUnit);
+  const speed = b.animSpeed ?? 1;
+
+  // 숫자 뱃지 — 동그라미/세모/네모/밑줄
+  if (b.numberShape) {
+    const shapeColor = b.numberShapeColor ?? '#d97757';
+    const fs = b.fontSize;
+    const text = b.text.split('\n')[0] ?? '';
+    const common: React.CSSProperties = {
+      fontFamily: `"${b.font}", "Noto Sans KR", sans-serif`,
+      fontSize: fs,
+      fontWeight: weight,
+      color: b.color,
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    };
+    let badge: React.ReactNode;
+    if (b.numberShape === 'circle') {
+      const d = Math.max(fs * 2.1, fs + text.length * fs * 0.62);
+      badge = <span style={{ ...common, width: d, height: d, borderRadius: '50%', background: shapeColor }}>{text}</span>;
+    } else if (b.numberShape === 'square') {
+      badge = <span style={{ ...common, padding: `${fs * 0.35}px ${fs * 0.55}px`, borderRadius: 10, background: shapeColor }}>{text}</span>;
+    } else if (b.numberShape === 'triangle') {
+      const w = Math.max(fs * 2.8, fs + text.length * fs * 0.8);
+      badge = (
+        <span
+          style={{
+            ...common, width: w, height: w * 0.88, background: shapeColor,
+            clipPath: 'polygon(50% 0, 0 100%, 100% 100%)', alignItems: 'flex-end',
+            paddingBottom: fs * 0.3,
+          }}
+        >
+          {text}
+        </span>
+      );
+    } else {
+      badge = (
+        <span style={{ ...common, borderBottom: `5px solid ${shapeColor}`, paddingBottom: 4 }}>{text}</span>
+      );
+    }
+    return (
+      <div style={{ textAlign: b.align }}>
+        <AnimBox animId={b.animation} speed={speed}>{badge}</AnimBox>
+      </div>
+    );
+  }
 
   // 부분 스타일(runs): 줄을 스타일 세그먼트로 나눠 렌더
   if (b.runs?.length) {
@@ -145,26 +224,33 @@ function BlockView({ b }: { b: Block }) {
     );
   }
 
+  // 글자별 단위는 블록 맨 위부터 글자 수를 누적해 순서를 이어간다
   return (
     <div style={{ textAlign: b.align, lineHeight: 1.55 }}>
-      {b.text.split('\n').map((line, i) => (
-        <div key={i}>
-          <TypoText
-            text={line}
-            animId={b.animation}
-            style={{
-              fontFamily: `"${b.font}", "Noto Sans KR", sans-serif`,
-              fontSize: b.fontSize,
-              fontWeight: weight,
-              color: b.color,
-              background: b.highlight ?? undefined,
-              padding: b.highlight ? '0 8px' : undefined,
-              borderRadius: b.highlight ? 4 : undefined,
-              boxDecorationBreak: 'clone',
-            }}
-          />
-        </div>
-      ))}
+      {splitWithOffsets(b.text).map(({ line, startIdx }, i) => {
+        return (
+          <div key={i}>
+            <TypoText
+              text={line}
+              animId={b.animation}
+              unit={unit}
+              speed={speed}
+              charOffset={startIdx}
+              lineIdx={i}
+              style={{
+                fontFamily: `"${b.font}", "Noto Sans KR", sans-serif`,
+                fontSize: b.fontSize,
+                fontWeight: weight,
+                color: b.color,
+                background: b.highlight ?? undefined,
+                padding: b.highlight ? '0 8px' : undefined,
+                borderRadius: b.highlight ? 4 : undefined,
+                boxDecorationBreak: 'clone',
+              }}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -241,6 +241,7 @@ textarea.img-desc { resize: vertical; outline: none; min-height: 60px; }
   box-shadow: 0 1px 4px rgba(31, 30, 27, 0.25); z-index: 5;
 }
 .resize-handle:hover { opacity: 1; }
+.resize-handle.top { bottom: auto; top: -7px; }
 .ed-sec-item.dragging { opacity: 0.4; }
 .ed-sec-item.drag-over { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(217, 119, 87, 0.25); }
 .ed-inspector { width: 300px; flex-shrink: 0; position: sticky; top: 78px; max-height: calc(100vh - 140px); overflow-y: auto; }

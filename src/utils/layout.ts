@@ -1,12 +1,21 @@
-import type { Block, Section } from '../state/types';
+import type { Block, NumberShape, Section } from '../state/types';
 import { segmentLine, styleAt } from './richText';
+import { effectiveUnit } from '../data/typoAnimations';
 
 /**
  * 섹션 → 그리기 프리미티브 목록.
  * SVG 추출(피그마 편집용)·PNG 추출(캔버스 래스터)·GIF 추출이 같은 레이아웃을 공유한다.
  */
+export interface AnimMeta {
+  unit: 'char' | 'line';
+  speed: number; // 배속 (지연·재생시간을 1/speed로)
+  lineIdx: number; // 블록 내 줄 순서 (줄별 단위용)
+  charOffset: number; // 블록 맨 위부터 누적된 글자 수 (글자별 단위용)
+}
+
 export type Prim =
   | { type: 'rect'; x: number; y: number; w: number; h: number; color: string; rx: number }
+  | { type: 'shape'; shape: NumberShape; x: number; y: number; w: number; h: number; color: string }
   | {
       type: 'line';
       text: string;
@@ -17,9 +26,16 @@ export type Prim =
       weight: number;
       color: string;
       anim: string | null;
+      animMeta: AnimMeta | null;
       charXs: number[] | null; // 글자별 애니메이션용 x 좌표
     }
-  | { type: 'image'; x: number; y: number; w: number; h: number; dataUrl: string }
+  | {
+      type: 'image';
+      x: number; y: number; w: number; h: number;
+      dataUrl: string;
+      anim: string | null;
+      animSpeed: number;
+    }
   | { type: 'placeholder'; x: number; y: number; w: number; h: number; descLines: string[] };
 
 export interface SectionLayout {
@@ -174,16 +190,27 @@ export function layoutSection(section: Section, width: number): SectionLayout {
     }
 
     for (const b of seg.blocks) {
-      const blockTop = y; // 블록 높이(heightPx) 적용 기준 — 상단 고정
+      const blockTop = y; // 블록 높이(heightPx)·상단 여백(padTop) 기준점
+      if (b.padTop) y += b.padTop;
       const applyMinHeight = () => {
         if (b.heightPx && y - blockTop < b.heightPx) y = blockTop + b.heightPx;
       };
+      const speed = b.animSpeed && b.animSpeed > 0 ? b.animSpeed : 1;
+      const unit = effectiveUnit(b.animation, b.animUnit);
+      // 블록 내 애니메이션 진행 카운터
+      let lineIdx = 0;
+      let charOffset = 0;
+      const meta = (): AnimMeta | null =>
+        b.animation ? { unit, speed, lineIdx, charOffset } : null;
 
       if (b.kind === 'image') {
         if (b.imageDataUrl && b.imgW > 0) {
           const w = Math.min(maxW, b.imgW);
           const h = (b.imgH / b.imgW) * w;
-          prims.push({ type: 'image', x: (width - w) / 2, y, w, h, dataUrl: b.imageDataUrl });
+          prims.push({
+            type: 'image', x: (width - w) / 2, y, w, h,
+            dataUrl: b.imageDataUrl, anim: b.animation, animSpeed: speed,
+          });
           y += h;
         } else {
           const h = 300;
@@ -191,6 +218,48 @@ export function layoutSection(section: Section, width: number): SectionLayout {
           prims.push({ type: 'placeholder', x: PAD_X, y, w: maxW, h, descLines });
           y += h;
         }
+        applyMinHeight();
+        y += GAP;
+        continue;
+      }
+
+      // 숫자 뱃지 블록 — 도형(동그라미/세모/네모/밑줄) 위에 단일 라인 텍스트
+      if (b.numberShape) {
+        const weight = blockWeight(b);
+        const fs = b.fontSize;
+        const text = b.text.split('\n')[0] ?? '';
+        setFont(c, b.font, fs, weight);
+        const tw = c.measureText(text).width;
+        const shapeColor = b.numberShapeColor ?? '#d97757';
+        let sw: number;
+        let sh: number;
+        if (b.numberShape === 'circle') {
+          sw = sh = Math.max(tw + fs * 0.9, fs * 2.1);
+        } else if (b.numberShape === 'square') {
+          sw = tw + fs * 1.1;
+          sh = fs * 1.9;
+        } else if (b.numberShape === 'triangle') {
+          sw = Math.max(tw + fs * 1.8, fs * 2.8);
+          sh = sw * 0.88;
+        } else {
+          sw = tw + 8;
+          sh = fs * 1.55 + 8;
+        }
+        const sx = b.align === 'left' ? PAD_X : b.align === 'right' ? width - PAD_X - sw : (width - sw) / 2;
+        if (b.numberShape === 'underline') {
+          prims.push({ type: 'shape', shape: 'underline', x: sx, y: y + fs * 1.45, w: sw, h: 5, color: shapeColor });
+        } else {
+          prims.push({ type: 'shape', shape: b.numberShape, x: sx, y, w: sw, h: sh, color: shapeColor });
+        }
+        // 텍스트 위치: 세모는 하단 중앙, 나머지는 중앙
+        const tx = sx + (sw - tw) / 2;
+        const baseline =
+          b.numberShape === 'triangle' ? y + sh * 0.78 : b.numberShape === 'underline' ? y + fs * 1.1 : y + sh / 2 + fs * 0.35;
+        prims.push({
+          type: 'line', text, x: tx, baseline, font: b.font, size: fs, weight,
+          color: b.color, anim: b.animation, animMeta: meta(), charXs: null,
+        });
+        y += sh;
         applyMinHeight();
         y += GAP;
         continue;
@@ -233,10 +302,12 @@ export function layoutSection(section: Section, width: number): SectionLayout {
             prims.push({
               type: 'line', text: s.text, x: sx, baseline,
               font: b.font, size: b.fontSize, weight: s.style.bold ? 800 : 400,
-              color: s.style.color, anim: b.animation, charXs,
+              color: s.style.color, anim: b.animation, animMeta: meta(), charXs,
             });
+            charOffset += [...s.text].length;
             sx += widths[si];
           });
+          lineIdx += 1;
           y += lineH;
         }
         applyMinHeight();
@@ -286,8 +357,11 @@ export function layoutSection(section: Section, width: number): SectionLayout {
           weight,
           color: b.color,
           anim: b.animation,
+          animMeta: meta(),
           charXs,
         });
+        charOffset += [...line].length;
+        lineIdx += 1;
         y += lineH;
       }
       applyMinHeight();

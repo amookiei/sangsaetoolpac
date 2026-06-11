@@ -48,7 +48,12 @@ export interface Block {
   highlight: string | null; // 폰트 배경(형광펜) 색
   align: 'left' | 'center' | 'right';
   bold: boolean;
-  animation: string | null; // 타이포 애니메이션 프리셋 id
+  animation: string | null; // 타이포/이미지 애니메이션 프리셋 id
+  animUnit?: 'char' | 'line'; // 텍스트 애니메이션 단위 — 글자별(위에서부터 누적) / 줄별(순서대로)
+  animSpeed?: number; // 재생 속도 배율 (0.25~3, 기본 1)
+  padTop?: number | null; // 블록 상단 여백 — 위 핸들로 조절
+  numberShape?: 'circle' | 'triangle' | 'square' | 'underline' | null; // 숫자 뱃지 모양
+  numberShapeColor?: string; // 숫자 뱃지 도형 색
   cardBg?: string | null; // 블록 전체 카드 배경 (리뷰 카드·쿠폰 등 템플릿용)
   runs?: StyleRun[]; // 글자 단위 부분 스타일
   heightPx?: number | null; // 블록 최소 높이 — 상단 고정, 하단으로 늘어남
@@ -60,19 +65,34 @@ export interface BgGrad {
   angle: number; // 0=위, 90=오른쪽 (CSS linear-gradient 기준)
 }
 
-/** 디자인 스타일 가이드 — 에디터에서 정립 후 전체 섹션에 일괄 적용 */
+export type NumberShape = 'circle' | 'triangle' | 'square' | 'underline';
+
+/** 디자인 스타일 가이드 — 제목/내용/숫자/배경색/그라데이션 섹션으로 정립 후 전체 적용 */
 export interface StyleGuide {
+  // 제목
   headingFont: string;
+  headingSize: number;
   headingColor: string;
   headingBold: boolean;
-  emphasisColor: string; // 강조 문구 색
-  emphasisHighlight: string | null; // 강조 문구 형광펜 배경
+  // 내용
   bodyFont: string;
-  bodyColor: string;
   bodySize: number;
-  numberColor: string; // 숫자/지표 강조 색
-  pageBg: string; // 섹션 기본 배경
-  cardBg: string; // 카드 블록 기본 배경
+  bodyColor: string;
+  // 강조
+  emphasisColor: string;
+  emphasisHighlight: string | null;
+  // 숫자
+  numberShape: NumberShape; // 동그라미/세모/네모/밑줄
+  numberSize: number;
+  numberColor: string; // 숫자 글자색
+  numberShapeColor: string; // 도형/밑줄 색
+  // 배경색
+  pageBg: string;
+  cardBg: string;
+  // 그라데이션
+  gradEnabled: boolean;
+  gradColor2: string;
+  gradAngle: number;
 }
 
 export interface Section {

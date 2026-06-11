@@ -1,9 +1,9 @@
 import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 import type { Section } from '../state/types';
 import { layoutSection, setFont, type Prim } from './layout';
-import { animById } from '../data/typoAnimations';
+import { animById, LINE_DELAY } from '../data/typoAnimations';
 import { evalAnim } from './animEval';
-import { loadImage, imgCache, fillSectionBg } from './renderPng';
+import { loadImage, imgCache, fillSectionBg, drawShape } from './renderPng';
 
 const LEAD_IN = 0.25; // 애니메이션 시작 전 정지 구간(초)
 const HOLD = 0.9; // 종료 후 정지 구간(초)
@@ -14,14 +14,23 @@ interface AnimLine {
   charWs: number[];
   lineW: number;
   animId: string;
-  duration: number;
+  duration: number; // 속도 반영 완료
   stagger: number;
-  mode: 'char' | 'block';
+  lineDelay: number; // 줄별 단위에서 이 줄의 시작 지연
+  unit: 'char' | 'line';
+  charOffset: number;
+  end: number;
+}
+
+interface AnimImage {
+  prim: Extract<Prim, { type: 'image' }>;
+  animId: string;
+  duration: number;
   end: number;
 }
 
 /**
- * 타이포 애니메이션이 들어간 섹션을 움직이는 GIF로 인코딩.
+ * 타이포/이미지 애니메이션이 들어간 섹션을 움직이는 GIF로 인코딩.
  * CSS 키프레임을 animEval.ts로 재현해 프레임별로 캔버스에 그린다.
  */
 export async function renderGif(
@@ -38,27 +47,44 @@ export async function renderGif(
 
   const measure = document.createElement('canvas').getContext('2d')!;
   const animLines: AnimLine[] = [];
+  const animImages: AnimImage[] = [];
+
   for (const p of lay.prims) {
-    if (p.type !== 'line' || !p.anim) continue;
+    if (p.type === 'image' && p.anim) {
+      const anim = animById(p.anim);
+      if (!anim) continue;
+      const dur = Math.max(anim.duration, 0.3) / (p.animSpeed || 1);
+      animImages.push({ prim: p, animId: anim.id, duration: dur, end: LEAD_IN + dur });
+      continue;
+    }
+    if (p.type !== 'line' || !p.anim || !p.animMeta) continue;
     const anim = animById(p.anim);
     if (!anim) continue;
+    const m = p.animMeta;
     setFont(measure, p.font, p.size, p.weight);
     const chars = [...p.text];
     const charWs = chars.map((ch) => measure.measureText(ch).width);
     const lineW = charWs.reduce((a, b) => a + b, 0);
-    const dur = Math.max(anim.duration, 0.3);
+    const dur = Math.max(anim.duration, 0.3) / m.speed;
+    const stagger = (anim.stagger || 0.06) / m.speed;
+    const lineDelay = m.unit === 'line' ? (m.lineIdx * LINE_DELAY) / m.speed : 0;
     const end =
-      LEAD_IN + dur + (anim.mode === 'char' ? anim.stagger * Math.max(chars.length - 1, 0) : 0);
+      m.unit === 'char'
+        ? LEAD_IN + dur + stagger * (m.charOffset + Math.max(chars.length - 1, 0))
+        : LEAD_IN + lineDelay + dur;
     animLines.push({
       prim: p, chars, charWs, lineW,
-      animId: anim.id, duration: dur, stagger: anim.stagger, mode: anim.mode, end,
+      animId: anim.id, duration: dur, stagger, lineDelay,
+      unit: m.unit, charOffset: m.charOffset, end,
     });
   }
-  if (animLines.length === 0) {
-    throw new Error('타이포 애니메이션이 적용된 텍스트가 없습니다. 5단계에서 애니메이션을 설정해 주세요.');
+
+  if (animLines.length === 0 && animImages.length === 0) {
+    throw new Error('애니메이션이 적용된 텍스트/이미지가 없습니다. 5단계에서 애니메이션을 설정해 주세요.');
   }
 
-  const total = Math.max(...animLines.map((l) => l.end)) + HOLD;
+  const total =
+    Math.max(...animLines.map((l) => l.end), ...animImages.map((i) => i.end), 0) + HOLD;
   const frameCount = Math.max(2, Math.round(total * fps));
 
   const canvas = document.createElement('canvas');
@@ -71,7 +97,10 @@ export async function renderGif(
     if (p.type === 'image') await loadImage(p.dataUrl).catch(() => null);
   }
 
-  const animSet = new Set<Prim>(animLines.map((l) => l.prim));
+  const animSet = new Set<Prim>([
+    ...animLines.map((l) => l.prim as Prim),
+    ...animImages.map((i) => i.prim as Prim),
+  ]);
   const gif = GIFEncoder();
 
   for (let f = 0; f < frameCount; f++) {
@@ -80,9 +109,10 @@ export async function renderGif(
     fillSectionBg(c, lay, width, h);
 
     for (const p of lay.prims) {
-      if (animSet.has(p)) continue; // 애니메이션 라인은 아래에서
+      if (animSet.has(p)) continue; // 애니메이션 요소는 아래에서
       drawStatic(c, p);
     }
+    for (const img of animImages) drawAnimImage(c, img, t);
     for (const line of animLines) drawAnimLine(c, line, t);
 
     const { data } = c.getImageData(0, 0, canvas.width, canvas.height);
@@ -104,6 +134,8 @@ function drawStatic(c: CanvasRenderingContext2D, p: Prim) {
     c.beginPath();
     c.roundRect(p.x, p.y, p.w, p.h, p.rx);
     c.fill();
+  } else if (p.type === 'shape') {
+    drawShape(c, p);
   } else if (p.type === 'image') {
     const img = imgFromCache(p.dataUrl);
     if (img) c.drawImage(img, p.x, p.y, p.w, p.h);
@@ -130,21 +162,48 @@ function imgFromCache(src: string): HTMLImageElement | null {
   return imgCache.get(src) ?? null;
 }
 
+/** 애니메이션 이미지 — 블록형 프리셋 상태를 이미지 전체에 적용 */
+function drawAnimImage(c: CanvasRenderingContext2D, item: AnimImage, t: number) {
+  const { prim } = item;
+  const img = imgFromCache(prim.dataUrl);
+  if (!img) return;
+  const rawP = (t - LEAD_IN) / item.duration;
+  const st = evalAnim(item.animId, t < LEAD_IN ? -1 : rawP, 48);
+
+  c.save();
+  if (st.clip !== null) {
+    const visW = prim.w * st.clip;
+    const cx = st.clipFrom === 'left' ? prim.x : prim.x + prim.w - visW;
+    c.beginPath();
+    c.rect(cx + st.tx, prim.y - 2, visW + 2, prim.h + 4);
+    c.clip();
+  }
+  const cx = prim.x + prim.w / 2 + st.tx;
+  const cy = prim.y + prim.h / 2 + st.ty;
+  c.translate(cx, cy);
+  if (st.rot) c.rotate(st.rot);
+  if (st.sx !== 1 || st.sy !== 1) c.scale(st.sx, st.sy);
+  if (st.blur > 0.2) c.filter = `blur(${st.blur.toFixed(1)}px)`;
+  c.globalAlpha = st.textAlpha !== null ? st.textAlpha : st.opacity;
+  c.drawImage(img, -prim.w / 2, -prim.h / 2, prim.w, prim.h);
+  c.restore();
+}
+
 function drawAnimLine(c: CanvasRenderingContext2D, line: AnimLine, t: number) {
   const { prim, chars, charWs, lineW } = line;
   const fs = prim.size;
   setFont(c, prim.font, fs, prim.weight);
 
-  // 라인 단위 클립(blockwipe/panorama/wipeclean)
-  const blockP = (t - LEAD_IN) / line.duration;
-  const blockState = evalAnim(line.animId, t < LEAD_IN ? -1 : blockP, fs);
-  const useClip = blockState.clip !== null && line.mode === 'block';
+  // 줄 단위 진행도 (줄별 모드·clip 프리셋)
+  const lineP = (t - LEAD_IN - line.lineDelay) / line.duration;
+  const lineState = evalAnim(line.animId, t < LEAD_IN ? -1 : lineP, fs);
+  const useClip = lineState.clip !== null && line.unit === 'line';
   if (useClip) {
     c.save();
-    const visW = lineW * (blockState.clip ?? 1);
-    const cx = blockState.clipFrom === 'left' ? prim.x : prim.x + lineW - visW;
+    const visW = lineW * (lineState.clip ?? 1);
+    const cx = lineState.clipFrom === 'left' ? prim.x : prim.x + lineW - visW;
     c.beginPath();
-    c.rect(cx + blockState.tx, prim.baseline - fs * 1.4, visW + 2, fs * 2);
+    c.rect(cx + lineState.tx, prim.baseline - fs * 1.4, visW + 2, fs * 2);
     c.clip();
   }
 
@@ -155,7 +214,9 @@ function drawAnimLine(c: CanvasRenderingContext2D, line: AnimLine, t: number) {
     const w = charWs[i];
     if (ch !== ' ') {
       const rawP =
-        line.mode === 'char' ? (t - LEAD_IN - i * line.stagger) / line.duration : blockP;
+        line.unit === 'char'
+          ? (t - LEAD_IN - (line.charOffset + i) * line.stagger) / line.duration
+          : lineP;
       const st = evalAnim(line.animId, t < LEAD_IN ? -1 : rawP, fs);
       const spreadTx = st.spread !== 0 ? (i - (n - 1) / 2) * st.spread * fs : 0;
       const cx = x + w / 2 + st.tx + spreadTx;
