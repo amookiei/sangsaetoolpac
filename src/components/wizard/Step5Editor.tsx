@@ -65,6 +65,57 @@ export function Step5Editor({ project }: { project: Project }) {
     if (block) patchBlockById(block.id, patch);
   };
 
+  /** 섹션 복사 — 새 id로 깊은 복제 후 바로 뒤에 삽입 (구조 리스트도 동기화) */
+  const duplicateSection = (idx: number) => {
+    const src = project.sections[idx];
+    const copy = {
+      ...src,
+      id: uid(),
+      name: `${src.name} 복사본`,
+      blocks: src.blocks.map((b) => ({ ...b, id: uid(), runs: b.runs?.map((r) => ({ ...r })) })),
+      bgLayers: src.bgLayers?.map((L) => ({ ...L, id: uid() })),
+    };
+    const sections = [...project.sections];
+    sections.splice(idx + 1, 0, copy);
+    const structure =
+      project.structure.length === project.sections.length
+        ? (() => {
+            const st = [...project.structure];
+            st.splice(idx + 1, 0, { ...st[idx], name: copy.name });
+            return st;
+          })()
+        : project.structure;
+    updateProject(project.id, { sections, structure });
+    setSecIdx(idx + 1);
+  };
+
+  /** 섹션 이름 바꾸기 */
+  const renameSection = (idx: number) => {
+    const s = project.sections[idx];
+    const name = prompt('섹션 이름', s.name)?.trim();
+    if (!name || name === s.name) return;
+    const sections = project.sections.map((x, i) => (i === idx ? { ...x, name } : x));
+    const structure =
+      project.structure.length === project.sections.length
+        ? project.structure.map((x, i) => (i === idx ? { ...x, name } : x))
+        : project.structure;
+    updateProject(project.id, { sections, structure });
+  };
+
+  /** 섹션 삭제 */
+  const removeSection = (idx: number) => {
+    const s = project.sections[idx];
+    if (!confirm(`'${s.name}' 섹션을 삭제할까요?`)) return;
+    const sections = project.sections.filter((_, i) => i !== idx);
+    const structure =
+      project.structure.length === project.sections.length
+        ? project.structure.filter((_, i) => i !== idx)
+        : project.structure;
+    updateProject(project.id, { sections, structure });
+    setSecIdx((cur) => Math.max(0, Math.min(cur > idx ? cur - 1 : cur, sections.length - 1)));
+    setSelBlock(null);
+  };
+
   /** 섹션 드래그 순서 변경 */
   const moveSection = (from: number, to: number) => {
     if (from === to) return;
@@ -216,9 +267,10 @@ export function Step5Editor({ project }: { project: Project }) {
             <>
               <p className="hint" style={{ margin: '0 0 6px' }}>꾹 눌러 드래그하면 순서가 바뀝니다</p>
               {project.sections.map((s, i) => (
-                <button
+                <div
                   key={s.id}
                   draggable
+                  role="button"
                   className={`ed-sec-item ${i === secIdx ? 'on' : ''} ${dragIdx === i ? 'dragging' : ''} ${overIdx === i && dragIdx !== null && dragIdx !== i ? 'drag-over' : ''}`}
                   onClick={() => {
                     setSecIdx(i);
@@ -241,8 +293,40 @@ export function Step5Editor({ project }: { project: Project }) {
                     setOverIdx(null);
                   }}
                 >
-                  ⠿ {i + 1}. {s.name}
-                </button>
+                  <span className="sec-name">⠿ {i + 1}. {s.name}</span>
+                  <span className="sec-actions">
+                    <button
+                      className="icon-btn"
+                      title="섹션 복사"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        duplicateSection(i);
+                      }}
+                    >
+                      ⧉
+                    </button>
+                    <button
+                      className="icon-btn"
+                      title="이름 바꾸기"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        renameSection(i);
+                      }}
+                    >
+                      ✎
+                    </button>
+                    <button
+                      className="icon-btn"
+                      title="섹션 삭제"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeSection(i);
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                </div>
               ))}
               <div style={{ marginTop: 12, display: 'grid', gap: 6 }}>
                 <button className="btn ghost sm" onClick={() => addBlock('heading')}>+ 제목 블록</button>
