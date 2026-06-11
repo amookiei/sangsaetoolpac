@@ -1,5 +1,26 @@
 import type { Section } from '../state/types';
-import { layoutSection, setFont, gradPoints, type SectionLayout } from './layout';
+import { layoutSection, setFont, gradPoints, type Prim, type SectionLayout } from './layout';
+
+/** 숫자 뱃지 도형 그리기 (PNG·GIF 공용) */
+export function drawShape(c: CanvasRenderingContext2D, p: Extract<Prim, { type: 'shape' }>) {
+  c.fillStyle = p.color;
+  if (p.shape === 'circle') {
+    c.beginPath();
+    c.arc(p.x + p.w / 2, p.y + p.h / 2, p.w / 2, 0, Math.PI * 2);
+    c.fill();
+  } else if (p.shape === 'triangle') {
+    c.beginPath();
+    c.moveTo(p.x + p.w / 2, p.y);
+    c.lineTo(p.x, p.y + p.h);
+    c.lineTo(p.x + p.w, p.y + p.h);
+    c.closePath();
+    c.fill();
+  } else {
+    c.beginPath();
+    c.roundRect(p.x, p.y, p.w, p.h, p.shape === 'square' ? 10 : 2.5);
+    c.fill();
+  }
+}
 
 /** 섹션 배경 채우기 (단색 또는 그라디언트) */
 export function fillSectionBg(c: CanvasRenderingContext2D, lay: SectionLayout, w: number, h: number) {
@@ -56,6 +77,8 @@ export async function renderPngCanvas(
       c.beginPath();
       c.roundRect(p.x, p.y, p.w, p.h, p.rx);
       c.fill();
+    } else if (p.type === 'shape') {
+      drawShape(c, p);
     } else if (p.type === 'image') {
       try {
         const img = await loadImage(p.dataUrl);

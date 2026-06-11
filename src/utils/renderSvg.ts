@@ -1,6 +1,6 @@
 import type { Section } from '../state/types';
 import { layoutSection, gradPoints } from './layout';
-import { TYPO_KEYFRAMES_CSS, animById } from '../data/typoAnimations';
+import { TYPO_KEYFRAMES_CSS, LINE_DELAY, animById } from '../data/typoAnimations';
 
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -9,7 +9,7 @@ const esc = (s: string) =>
  * 피그마에서 편집 가능한 네이티브 SVG 생성.
  * 텍스트는 <text>, 배경은 <rect>, 이미지는 <image>로 추출되어
  * 피그마 임포트 시 레이어별로 수정할 수 있다.
- * animated=true 면 타이포 애니메이션이 CSS로 임베드된다(브라우저 재생용).
+ * animated=true 면 타이포/이미지 애니메이션이 CSS로 임베드된다(브라우저 재생용).
  */
 export function renderSvg(section: Section, width: number, animated: boolean): string {
   const lay = layoutSection(section, width);
@@ -21,10 +21,36 @@ export function renderSvg(section: Section, width: number, animated: boolean): s
       parts.push(
         `<rect x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}" width="${p.w.toFixed(1)}" height="${p.h.toFixed(1)}" rx="${p.rx}" fill="${p.color}"/>`,
       );
+    } else if (p.type === 'shape') {
+      if (p.shape === 'circle') {
+        parts.push(
+          `<circle cx="${(p.x + p.w / 2).toFixed(1)}" cy="${(p.y + p.h / 2).toFixed(1)}" r="${(p.w / 2).toFixed(1)}" fill="${p.color}"/>`,
+        );
+      } else if (p.shape === 'triangle') {
+        const pts = `${(p.x + p.w / 2).toFixed(1)},${p.y.toFixed(1)} ${p.x.toFixed(1)},${(p.y + p.h).toFixed(1)} ${(p.x + p.w).toFixed(1)},${(p.y + p.h).toFixed(1)}`;
+        parts.push(`<polygon points="${pts}" fill="${p.color}"/>`);
+      } else if (p.shape === 'square') {
+        parts.push(
+          `<rect x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}" width="${p.w.toFixed(1)}" height="${p.h.toFixed(1)}" rx="10" fill="${p.color}"/>`,
+        );
+      } else {
+        // underline
+        parts.push(
+          `<rect x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}" width="${p.w.toFixed(1)}" height="${p.h.toFixed(1)}" rx="2.5" fill="${p.color}"/>`,
+        );
+      }
     } else if (p.type === 'image') {
-      parts.push(
-        `<image x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}" width="${p.w.toFixed(1)}" height="${p.h.toFixed(1)}" href="${p.dataUrl}" preserveAspectRatio="xMidYMid slice"/>`,
-      );
+      const anim = animated ? animById(p.anim) : null;
+      const base = `x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}" width="${p.w.toFixed(1)}" height="${p.h.toFixed(1)}" href="${p.dataUrl}" preserveAspectRatio="xMidYMid slice"`;
+      if (anim) {
+        hasAnim = true;
+        const dur = Math.max(anim.duration, 0.3) / (p.animSpeed || 1);
+        parts.push(
+          `<image ${base} class="ta" style="animation:ta-${anim.id} ${dur.toFixed(2)}s 0s both; animation-timing-function:cubic-bezier(.2,.7,.3,1)"/>`,
+        );
+      } else {
+        parts.push(`<image ${base}/>`);
+      }
     } else if (p.type === 'placeholder') {
       parts.push(
         `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="12" fill="#f0f4ff" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="6 5"/>`,
@@ -37,16 +63,28 @@ export function renderSvg(section: Section, width: number, animated: boolean): s
     } else {
       const common = `font-family="${esc(p.font)}, Noto Sans KR, sans-serif" font-size="${p.size}" font-weight="${p.weight}" fill="${p.color}"`;
       const anim = animated ? animById(p.anim) : null;
-      if (anim && p.charXs) {
+      const m = p.animMeta;
+      if (anim && m) {
         hasAnim = true;
-        const chars = [...p.text];
-        chars.forEach((ch, i) => {
-          if (ch === ' ') return;
-          const delay = anim.mode === 'char' ? i * anim.stagger : 0;
+        const dur = Math.max(anim.duration, 0.3) / m.speed;
+        if (m.unit === 'line' || !p.charXs) {
+          // 줄별 — 줄 전체가 순서대로 등장
+          const delay = (m.lineIdx * LINE_DELAY) / m.speed;
           parts.push(
-            `<text x="${p.charXs![i].toFixed(1)}" y="${p.baseline.toFixed(1)}" ${common} class="ta" style="animation:ta-${anim.id} ${Math.max(anim.duration, 0.3)}s ${delay.toFixed(2)}s both; animation-timing-function:cubic-bezier(.2,.7,.3,1)">${esc(ch)}</text>`,
+            `<text x="${p.x.toFixed(1)}" y="${p.baseline.toFixed(1)}" ${common} class="ta" style="animation:ta-${anim.id} ${dur.toFixed(2)}s ${delay.toFixed(2)}s both; animation-timing-function:cubic-bezier(.2,.7,.3,1)">${esc(p.text)}</text>`,
           );
-        });
+        } else {
+          // 글자별 — 블록 맨 위부터 누적 순서로 등장
+          const stagger = (anim.stagger || 0.06) / m.speed;
+          const chars = [...p.text];
+          chars.forEach((ch, i) => {
+            if (ch === ' ') return;
+            const delay = (m.charOffset + i) * stagger;
+            parts.push(
+              `<text x="${p.charXs![i].toFixed(1)}" y="${p.baseline.toFixed(1)}" ${common} class="ta" style="animation:ta-${anim.id} ${dur.toFixed(2)}s ${delay.toFixed(2)}s both; animation-timing-function:cubic-bezier(.2,.7,.3,1)">${esc(ch)}</text>`,
+            );
+          });
+        }
       } else {
         parts.push(`<text x="${p.x.toFixed(1)}" y="${p.baseline.toFixed(1)}" ${common}>${esc(p.text)}</text>`);
       }

@@ -37,6 +37,23 @@ export const TYPO_ANIMS: TypoAnim[] = [
 
 export const animById = (id: string | null) => TYPO_ANIMS.find((a) => a.id === id) ?? null;
 
+/** 줄별 애니메이션의 줄 간 지연 기본값(초) */
+export const LINE_DELAY = 0.35;
+
+/** clip 기반 프리셋 — 글자별 분리가 불가능해 항상 줄 단위로 재생 */
+export const CLIP_ANIMS = new Set(['blockwipe', 'panorama', 'wipeclean']);
+
+/** 이미지 블록에 적용 가능한 프리셋 (블록 단위 동작) */
+export const IMAGE_ANIMS = TYPO_ANIMS.filter((a) => a.mode === 'block');
+
+/** 블록의 실효 애니메이션 단위 */
+export function effectiveUnit(animId: string | null, unit?: 'char' | 'line'): 'char' | 'line' {
+  if (!animId) return 'char';
+  if (CLIP_ANIMS.has(animId)) return 'line';
+  if (unit) return unit;
+  return animById(animId)?.mode === 'char' ? 'char' : 'line';
+}
+
 /**
  * 애니메이션 키프레임 CSS. 미리보기(HTML)와 애니메이션 SVG 추출에 공통 사용.
  * 모든 프리셋은 2.4초 주기로 반복 재생되어 GIF 느낌을 냄.

@@ -5,11 +5,15 @@ import { TypoText } from './TypoText';
 export function AnimPicker({
   value,
   onChange,
+  blockOnly = false,
 }: {
   value: string | null;
   onChange: (id: string | null) => void;
+  /** 이미지용 — 블록 단위로 동작하는 프리셋만 표시 */
+  blockOnly?: boolean;
 }) {
   const groups: Array<'추천' | '일반'> = ['추천', '일반'];
+  const visible = TYPO_ANIMS.filter((a) => !blockOnly || a.mode === 'block');
   return (
     <div>
       <button
@@ -23,7 +27,7 @@ export function AnimPicker({
         <div key={g}>
           <div className="anim-group-label">{g}</div>
           <div className="anim-grid">
-            {TYPO_ANIMS.filter((a) => a.group === g).map((a) => (
+            {visible.filter((a) => a.group === g).map((a) => (
               <button
                 key={a.id}
                 className={`anim-cell ${value === a.id ? 'on' : ''}`}
