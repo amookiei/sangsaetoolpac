@@ -211,17 +211,20 @@ export function buildSections(p: Project, copies: SectionCopy[]): Section[] {
   return p.structure.map((item, i) => {
     const c = copies[i];
     const isIntro = i === 0;
-    const blocks: Block[] = [
-      makeBlock({
-        kind: 'heading',
-        text: c.heading,
-        fontSize: isIntro ? 44 : 32,
-        bold: true,
-        color: isIntro ? '#1a1a2e' : '#222222',
-        animation: isIntro ? 'riseup' : null,
-        font: p.globalFont,
-      }),
-    ];
+    const blocks: Block[] = [];
+    if (c.heading) {
+      blocks.push(
+        makeBlock({
+          kind: 'heading',
+          text: c.heading,
+          fontSize: isIntro ? 44 : 32,
+          bold: true,
+          color: isIntro ? '#1a1a2e' : '#222222',
+          animation: isIntro ? 'riseup' : null,
+          font: p.globalFont,
+        }),
+      );
+    }
     if (c.body) {
       blocks.push(
         makeBlock({ kind: 'body', text: c.body, fontSize: 20, color: '#555566', font: p.globalFont }),
