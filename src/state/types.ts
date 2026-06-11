@@ -112,6 +112,17 @@ export interface StyleGuide {
   gradEnabled: boolean; // 전체 적용 시 1번 그라데이션 사용
 }
 
+/** 섹션 배경 레이어 — 블록 콘텐츠(레이어 1) 아래에 깔리는 레이어 2, 3, … */
+export interface BgLayer {
+  id: string;
+  name: string;
+  imageDataUrl: string | null; // 배경 이미지 (cover)
+  color: string | null; // 또는 단색
+  opacity: number; // 0~1
+  locked: boolean; // 잠금 — 실수로 수정/삭제 방지
+  hidden: boolean;
+}
+
 export interface Section {
   id: string;
   name: string;
@@ -119,6 +130,9 @@ export interface Section {
   bg: string;
   bgGrad?: BgGrad | null; // 설정 시 bg → color2 그라디언트 배경
   blocks: Block[];
+  bgLayers?: BgLayer[]; // 레이어 2부터 — 배열 앞쪽이 콘텐츠에 가까움
+  contentLocked?: boolean; // 레이어 1(블록 콘텐츠) 잠금
+  contentOpacity?: number; // 레이어 1 불투명도 (0~1, 기본 1)
 }
 
 export interface StructureItem {

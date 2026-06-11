@@ -3,7 +3,7 @@ import type { Section } from '../state/types';
 import { layoutSection, setFont, type Prim } from './layout';
 import { animById, LINE_DELAY } from '../data/typoAnimations';
 import { evalAnim } from './animEval';
-import { loadImage, imgCache, fillSectionBg, drawShape, fillTextBold } from './renderPng';
+import { loadImage, imgCache, fillSectionBg, drawShape, fillTextBold, drawBgLayers } from './renderPng';
 
 const LEAD_IN = 0.25; // 애니메이션 시작 전 정지 구간(초)
 const HOLD = 0.9; // 종료 후 정지 구간(초)
@@ -92,9 +92,23 @@ export async function renderGif(
   canvas.height = Math.round(h * scale);
   const c = canvas.getContext('2d', { willReadFrequently: true })!;
 
-  // 이미지 프리로드
+  // 이미지 프리로드 (블록 이미지 + 배경 레이어)
   for (const p of lay.prims) {
     if (p.type === 'image') await loadImage(p.dataUrl).catch(() => null);
+  }
+  for (const L of section.bgLayers ?? []) {
+    if (L.imageDataUrl) await loadImage(L.imageDataUrl).catch(() => null);
+  }
+
+  // 레이어 1(블록 콘텐츠) 불투명도 — 1 미만이면 프레임마다 별도 캔버스에 그려 합성
+  const contentOpacity = section.contentOpacity ?? 1;
+  let cc: HTMLCanvasElement | null = null;
+  let cctx: CanvasRenderingContext2D | null = null;
+  if (contentOpacity < 1) {
+    cc = document.createElement('canvas');
+    cc.width = canvas.width;
+    cc.height = canvas.height;
+    cctx = cc.getContext('2d')!;
   }
 
   const animSet = new Set<Prim>([
@@ -107,13 +121,28 @@ export async function renderGif(
     const t = f / fps;
     c.setTransform(scale, 0, 0, scale, 0, 0);
     fillSectionBg(c, lay, width, h);
+    await drawBgLayers(c, section, width, h);
 
+    let tc = c; // 콘텐츠를 그릴 대상 (불투명도 합성 시 별도 캔버스)
+    if (cctx && cc) {
+      cctx.setTransform(1, 0, 0, 1, 0, 0);
+      cctx.clearRect(0, 0, cc.width, cc.height);
+      cctx.setTransform(scale, 0, 0, scale, 0, 0);
+      tc = cctx;
+    }
     for (const p of lay.prims) {
       if (animSet.has(p)) continue; // 애니메이션 요소는 아래에서
-      drawStatic(c, p);
+      drawStatic(tc, p);
     }
-    for (const img of animImages) drawAnimImage(c, img, t);
-    for (const line of animLines) drawAnimLine(c, line, t);
+    for (const img of animImages) drawAnimImage(tc, img, t);
+    for (const line of animLines) drawAnimLine(tc, line, t);
+    if (cctx && cc) {
+      c.save();
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      c.globalAlpha = contentOpacity;
+      c.drawImage(cc, 0, 0);
+      c.restore();
+    }
 
     const { data } = c.getImageData(0, 0, canvas.width, canvas.height);
     const palette = quantize(data, 256);

@@ -26,7 +26,9 @@ export function Step5Editor({ project }: { project: Project }) {
   const t = useT();
   const [secIdx, setSecIdx] = useState(0);
   const [selBlock, setSelBlock] = useState<string | null>(null);
-  const [tab, setTab] = useState<'sections' | 'templates'>('sections');
+  const [tab, setTab] = useState<'sections' | 'templates' | 'layers'>('sections');
+  const layerImgInput = useRef<HTMLInputElement>(null);
+  const pendingLayerId = useRef<string | null>(null);
   const [showGuide, setShowGuide] = useState(false);
   const [selRange, setSelRange] = useState<{ start: number; end: number } | null>(null);
   const [runColor, setRunColor] = useState('#d97757');
@@ -202,6 +204,12 @@ export function Step5Editor({ project }: { project: Project }) {
             >
               T 텍스트
             </button>
+            <button
+              className={`chip selectable ${tab === 'layers' ? 'on' : ''}`}
+              onClick={() => setTab('layers')}
+            >
+              레이어
+            </button>
           </div>
 
           {tab === 'sections' && (
@@ -263,6 +271,146 @@ export function Step5Editor({ project }: { project: Project }) {
               ))}
             </div>
           )}
+
+          {tab === 'layers' && (
+            <div className="tpl-list">
+              <p className="hint" style={{ marginTop: 0 }}>
+                레이어 1은 블록 콘텐츠, 레이어 2부터는 그 아래에 깔리는 배경 레이어입니다.
+                (현재 섹션 「{sec.name}」)
+              </p>
+
+              {/* 레이어 1 — 블록 콘텐츠 */}
+              <div className="layer-card">
+                <div className="layer-head">
+                  <strong style={{ fontSize: 12.5 }}>레이어 1 · 블록 콘텐츠</strong>
+                  <span style={{ flex: 1 }} />
+                  <button
+                    className="icon-btn"
+                    title={sec.contentLocked ? '잠금 해제' : '잠금 (캔버스에서 편집 불가)'}
+                    onClick={() => updateSection(project.id, sec.id, { contentLocked: !sec.contentLocked })}
+                  >
+                    {sec.contentLocked ? '🔒' : '🔓'}
+                  </button>
+                </div>
+                <div className="layer-op">
+                  <span className="hint">불투명도 {Math.round((sec.contentOpacity ?? 1) * 100)}%</span>
+                  <input
+                    type="range" min={10} max={100} value={Math.round((sec.contentOpacity ?? 1) * 100)}
+                    onChange={(e) => updateSection(project.id, sec.id, { contentOpacity: +e.target.value / 100 })}
+                  />
+                </div>
+              </div>
+
+              {/* 레이어 2+ */}
+              {(sec.bgLayers ?? []).map((L, i) => {
+                const patchLayer = (patch: Partial<typeof L>) =>
+                  updateSection(project.id, sec.id, {
+                    bgLayers: (sec.bgLayers ?? []).map((x) => (x.id === L.id ? { ...x, ...patch } : x)),
+                  });
+                return (
+                  <div key={L.id} className="layer-card" style={{ opacity: L.hidden ? 0.5 : 1 }}>
+                    <div className="layer-head">
+                      <button
+                        className="icon-btn"
+                        title={L.hidden ? '보이기' : '숨기기'}
+                        onClick={() => patchLayer({ hidden: !L.hidden })}
+                      >
+                        {L.hidden ? '🚫' : '👁'}
+                      </button>
+                      <strong style={{ fontSize: 12.5 }}>레이어 {i + 2}</strong>
+                      {L.imageDataUrl && (
+                        <img src={L.imageDataUrl} style={{ width: 30, height: 20, objectFit: 'cover', borderRadius: 4 }} />
+                      )}
+                      <span style={{ flex: 1 }} />
+                      <button
+                        className="icon-btn"
+                        title={L.locked ? '잠금 해제' : '잠금'}
+                        onClick={() => patchLayer({ locked: !L.locked })}
+                      >
+                        {L.locked ? '🔒' : '🔓'}
+                      </button>
+                      <button
+                        className="icon-btn"
+                        title="레이어 삭제"
+                        disabled={L.locked}
+                        onClick={() =>
+                          updateSection(project.id, sec.id, {
+                            bgLayers: (sec.bgLayers ?? []).filter((x) => x.id !== L.id),
+                          })
+                        }
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
+                      <button
+                        className="btn subtle sm"
+                        disabled={L.locked}
+                        onClick={() => {
+                          pendingLayerId.current = L.id;
+                          layerImgInput.current?.click();
+                        }}
+                      >
+                        이미지
+                      </button>
+                      <input
+                        type="color"
+                        disabled={L.locked}
+                        value={L.color ?? '#f5ede2'}
+                        onChange={(e) => patchLayer({ color: e.target.value, imageDataUrl: null })}
+                      />
+                      {L.imageDataUrl && (
+                        <button className="btn subtle sm" disabled={L.locked} onClick={() => patchLayer({ imageDataUrl: null })}>
+                          이미지 제거
+                        </button>
+                      )}
+                    </div>
+                    <div className="layer-op">
+                      <span className="hint">불투명도 {Math.round(L.opacity * 100)}%</span>
+                      <input
+                        type="range" min={5} max={100} value={Math.round(L.opacity * 100)}
+                        disabled={L.locked}
+                        onChange={(e) => patchLayer({ opacity: +e.target.value / 100 })}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+
+              <button
+                className="btn ghost sm"
+                style={{ width: '100%', marginTop: 6 }}
+                onClick={() =>
+                  updateSection(project.id, sec.id, {
+                    bgLayers: [
+                      { id: uid(), name: '', imageDataUrl: null, color: '#f5ede2', opacity: 1, locked: false, hidden: false },
+                      ...(sec.bgLayers ?? []),
+                    ],
+                  })
+                }
+              >
+                + 레이어 추가
+              </button>
+              <input
+                hidden
+                type="file"
+                accept="image/*"
+                ref={layerImgInput}
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  const lid = pendingLayerId.current;
+                  if (!f || !lid) return;
+                  const dataUrl = await readFileAsDataUrl(f);
+                  updateSection(project.id, sec.id, {
+                    bgLayers: (sec.bgLayers ?? []).map((x) =>
+                      x.id === lid ? { ...x, imageDataUrl: dataUrl } : x,
+                    ),
+                  });
+                }}
+              />
+            </div>
+          )}
         </aside>
 
         <div className="ed-canvas-wrap" onClick={() => setSelBlock(null)}>
@@ -278,13 +426,18 @@ export function Step5Editor({ project }: { project: Project }) {
                 zoom={scale}
                 onResizeBlock={(bid, h) => patchBlockById(bid, { heightPx: h })}
                 onResizeTop={(bid, p) => patchBlockById(bid, { padTop: p || null })}
-                onReorderBlocks={(fromId, toId) => {
+                onReorderBlocks={(fromId, toId, pos) => {
                   const blocks = [...sec.blocks];
                   const fromIdx = blocks.findIndex((b) => b.id === fromId);
-                  const toIdx = blocks.findIndex((b) => b.id === toId);
-                  if (fromIdx < 0 || toIdx < 0) return;
+                  if (fromIdx < 0) return;
                   const [moved] = blocks.splice(fromIdx, 1);
-                  blocks.splice(toIdx, 0, moved);
+                  let toIdx = blocks.findIndex((b) => b.id === toId);
+                  if (toIdx < 0) {
+                    blocks.splice(fromIdx, 0, moved);
+                  } else {
+                    if (pos === 'after') toIdx += 1;
+                    blocks.splice(toIdx, 0, moved);
+                  }
                   updateSection(project.id, sec.id, { blocks });
                 }}
                 onTextSelect={(blockId, start, end) => {
