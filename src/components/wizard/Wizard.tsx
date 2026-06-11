@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore, useCurrentProject } from '../../state/store';
 import { CATEGORY_LABEL, PLATFORM_LABEL } from '../../data/categories';
+import { flushCloudNow, isCloud } from '../../lib/supabaseSync';
 import { useT } from '../../i18n';
 import { Step1Brief } from './Step1Brief';
 import { Step2Structure } from './Step2Structure';
@@ -24,6 +25,21 @@ export function Wizard() {
   const project = useCurrentProject();
   const { updateProject, setView } = useStore();
   const t = useT();
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState('');
+
+  // 중간 저장 — 로컬(IndexedDB)은 항상 자동 저장, 클라우드는 즉시 push
+  const saveNow = async () => {
+    setSaving(true);
+    try {
+      if (isCloud()) await flushCloudNow();
+      setSavedAt(new Date().toLocaleTimeString('ko-KR', { hour12: false }));
+    } catch {
+      setSavedAt('클라우드 동기화 실패 (로컬엔 저장됨)');
+    } finally {
+      setSaving(false);
+    }
+  };
   useEffect(() => {
     if (!project) setView('dashboard');
   }, [project, setView]);
@@ -73,8 +89,14 @@ export function Wizard() {
         <button className="btn subtle" disabled={step <= 1} onClick={() => go(step - 1)}>
           {t('← 이전 단계')}
         </button>
-        <span className="hint">
-          {step}/7 · {t(STEPS[step - 1].name)}
+        <span style={{ display: 'inline-flex', gap: 12, alignItems: 'center' }}>
+          <span className="hint">
+            {step}/7 · {t(STEPS[step - 1].name)}
+          </span>
+          <button className="btn ghost sm" disabled={saving} onClick={saveNow}>
+            {saving ? '저장 중…' : '💾 중간 저장'}
+          </button>
+          {savedAt && <span className="hint">저장됨 · {savedAt}</span>}
         </span>
         <button className="btn" disabled={step >= 7} onClick={() => go(step + 1)}>
           {t('다음 단계 →')}

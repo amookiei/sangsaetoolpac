@@ -28,6 +28,14 @@ export function addRun(runs: StyleRun[] | undefined, run: StyleRun): StyleRun[] 
   return [...(runs ?? []), run];
 }
 
+/** 선택 범위 전체가 이미 굵게 상태인지 (굵게 토글용) */
+export function isRangeBold(b: Block, s: number, e: number): boolean {
+  for (let i = s; i < e; i++) {
+    if (!styleAt(b, i).bold) return false;
+  }
+  return e > s;
+}
+
 /** 선택 범위의 부분 스타일 제거 (걸친 run은 분할) */
 export function clearRuns(runs: StyleRun[] | undefined, s: number, e: number): StyleRun[] {
   const out: StyleRun[] = [];

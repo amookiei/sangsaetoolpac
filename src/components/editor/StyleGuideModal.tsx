@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { NumberShape, StyleGuide } from '../../state/types';
+import type { BodyStyle, GradPreset, NumberShape, StyleGuide } from '../../state/types';
 import { BUILTIN_FONTS } from '../../data/fonts';
 
 const SHAPE_LABEL: Record<NumberShape, string> = {
@@ -9,7 +9,9 @@ const SHAPE_LABEL: Record<NumberShape, string> = {
   underline: '__ 밑줄만',
 };
 
-/** 디자인 스타일 정립 모달 — 제목 / 내용 / 숫자 / 배경색 / 그라데이션 5개 섹션 */
+const uid = () => Math.random().toString(36).slice(2, 8);
+
+/** 디자인 스타일 정립 모달 — 제목 / 내용(다중) / 숫자 / 배경색 / 그라데이션(다중) */
 export function StyleGuideModal({
   initial,
   fontOptions,
@@ -26,6 +28,11 @@ export function StyleGuideModal({
   const fonts = fontOptions.length
     ? fontOptions
     : BUILTIN_FONTS.map((f) => ({ family: f.family, label: f.label }));
+
+  const patchBody = (id: string, p: Partial<BodyStyle>) =>
+    patch({ bodyStyles: g.bodyStyles.map((s) => (s.id === id ? { ...s, ...p } : s)) });
+  const patchGrad = (id: string, p: Partial<GradPreset>) =>
+    patch({ gradients: g.gradients.map((x) => (x.id === id ? { ...x, ...p } : x)) });
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -63,25 +70,62 @@ export function StyleGuideModal({
             </div>
           </div>
 
-          {/* ── 내용 ── */}
+          {/* ── 내용 (다중 스타일) ── */}
           <div className="sg-section">
-            <div className="sg-title">내용</div>
-            <label className="label">폰트</label>
-            <select className="input" value={g.bodyFont} onChange={(e) => patch({ bodyFont: e.target.value })}>
-              {fonts.map((f) => (
-                <option key={f.family} value={f.family}>{f.label}</option>
-              ))}
-            </select>
-            <label className="label">크기 · {g.bodySize}px</label>
-            <input
-              type="range" min={12} max={48} value={g.bodySize}
-              style={{ width: '100%' }}
-              onChange={(e) => patch({ bodySize: +e.target.value })}
-            />
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
-              <label className="label" style={{ margin: 0 }}>폰트 컬러</label>
-              <input type="color" value={g.bodyColor} onChange={(e) => patch({ bodyColor: e.target.value })} />
-            </div>
+            <div className="sg-title">내용 — 스타일 여러 개 등록 가능</div>
+            {g.bodyStyles.map((s, i) => (
+              <div key={s.id} className="sg-body-style">
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input
+                    className="input"
+                    style={{ width: 110, padding: '6px 8px', fontSize: 12.5, fontWeight: 700 }}
+                    value={s.name}
+                    onChange={(e) => patchBody(s.id, { name: e.target.value })}
+                  />
+                  <select
+                    className="input"
+                    style={{ flex: 1, padding: '6px 8px', fontSize: 12.5 }}
+                    value={s.font}
+                    onChange={(e) => patchBody(s.id, { font: e.target.value })}
+                  >
+                    {fonts.map((f) => (
+                      <option key={f.family} value={f.family}>{f.label}</option>
+                    ))}
+                  </select>
+                  <input type="color" value={s.color} onChange={(e) => patchBody(s.id, { color: e.target.value })} />
+                  {g.bodyStyles.length > 1 && (
+                    <button
+                      className="icon-btn"
+                      onClick={() => patch({ bodyStyles: g.bodyStyles.filter((x) => x.id !== s.id) })}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
+                  <span className="hint" style={{ width: 70 }}>크기 {s.size}px</span>
+                  <input
+                    type="range" min={12} max={48} value={s.size} style={{ flex: 1 }}
+                    onChange={(e) => patchBody(s.id, { size: +e.target.value })}
+                  />
+                </div>
+                {i < g.bodyStyles.length - 1 && <hr style={{ border: 'none', borderTop: '1px dashed var(--line)', margin: '8px 0' }} />}
+              </div>
+            ))}
+            <button
+              className="btn ghost sm"
+              style={{ marginTop: 8 }}
+              onClick={() =>
+                patch({
+                  bodyStyles: [
+                    ...g.bodyStyles,
+                    { ...g.bodyStyles[0], id: uid(), name: `내용 스타일 ${g.bodyStyles.length + 1}` },
+                  ],
+                })
+              }
+            >
+              + 내용 스타일 추가
+            </button>
           </div>
 
           {/* ── 숫자 ── */}
@@ -136,31 +180,50 @@ export function StyleGuideModal({
             </div>
           </div>
 
-          {/* ── 그라데이션 ── */}
+          {/* ── 그라데이션 (다중 저장) ── */}
           <div className="sg-section">
-            <div className="sg-title">그라데이션</div>
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, fontWeight: 600, marginTop: 8 }}>
+            <div className="sg-title">그라데이션 — 여러 개 저장</div>
+            {g.gradients.map((gr, i) => (
+              <div key={gr.id} style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
+                <span
+                  style={{
+                    width: 40, height: 24, borderRadius: 6, border: '1px solid var(--line)',
+                    background: `linear-gradient(${gr.angle}deg, ${gr.color1}, ${gr.color2})`,
+                  }}
+                />
+                <input type="color" value={gr.color1} onChange={(e) => patchGrad(gr.id, { color1: e.target.value })} />
+                <input type="color" value={gr.color2} onChange={(e) => patchGrad(gr.id, { color2: e.target.value })} />
+                <input
+                  type="range" min={0} max={360} step={15} value={gr.angle} style={{ flex: 1 }}
+                  title={`${gr.angle}°`}
+                  onChange={(e) => patchGrad(gr.id, { angle: +e.target.value })}
+                />
+                {g.gradients.length > 1 && (
+                  <button className="icon-btn" onClick={() => patch({ gradients: g.gradients.filter((x) => x.id !== gr.id) })}>
+                    ✕
+                  </button>
+                )}
+                {i === 0 && <span className="badge">기본</span>}
+              </div>
+            ))}
+            <button
+              className="btn ghost sm"
+              style={{ marginTop: 8 }}
+              onClick={() => patch({ gradients: [...g.gradients, { ...g.gradients[0], id: uid() }] })}
+            >
+              + 그라데이션 추가
+            </button>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, fontWeight: 600, marginTop: 10 }}>
               <input
                 type="checkbox"
                 checked={g.gradEnabled}
                 onChange={(e) => patch({ gradEnabled: e.target.checked })}
               />
-              섹션 배경에 그라데이션 사용
+              전체 적용 시 1번 그라데이션을 모든 섹션 배경에 사용
             </label>
-            {g.gradEnabled && (
-              <>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
-                  <label className="label" style={{ margin: 0 }}>색상 2</label>
-                  <input type="color" value={g.gradColor2} onChange={(e) => patch({ gradColor2: e.target.value })} />
-                </div>
-                <label className="label">방향 · {g.gradAngle}°</label>
-                <input
-                  type="range" min={0} max={360} step={15} value={g.gradAngle}
-                  style={{ width: '100%' }}
-                  onChange={(e) => patch({ gradAngle: +e.target.value })}
-                />
-              </>
-            )}
+            <p className="hint" style={{ marginBottom: 0 }}>
+              저장된 그라데이션은 에디터의 섹션 배경 설정에서 골라 쓸 수 있어요.
+            </p>
           </div>
 
           {/* ── 미리보기 ── */}
@@ -169,7 +232,7 @@ export function StyleGuideModal({
             <div
               style={{
                 background: g.gradEnabled
-                  ? `linear-gradient(${g.gradAngle}deg, ${g.pageBg}, ${g.gradColor2})`
+                  ? `linear-gradient(${g.gradients[0].angle}deg, ${g.gradients[0].color1}, ${g.gradients[0].color2})`
                   : g.pageBg,
                 borderRadius: 12, padding: 16, border: '1px solid var(--line)', textAlign: 'center',
               }}
@@ -178,8 +241,12 @@ export function StyleGuideModal({
               <div style={{ fontFamily: `"${g.headingFont}"`, fontWeight: g.headingBold ? 800 : 400, fontSize: Math.min(g.headingSize, 26), color: g.headingColor, marginTop: 8 }}>
                 제목이 이렇게 보여요
               </div>
-              <div style={{ fontFamily: `"${g.bodyFont}"`, fontSize: Math.min(g.bodySize, 15), color: g.bodyColor, marginTop: 6 }}>
-                내용 문구는 이런 톤으로 들어갑니다.{' '}
+              {g.bodyStyles.map((s) => (
+                <div key={s.id} style={{ fontFamily: `"${s.font}"`, fontSize: Math.min(s.size, 15), color: s.color, marginTop: 4 }}>
+                  {s.name} 문구 톤
+                </div>
+              ))}
+              <div style={{ fontSize: 13, marginTop: 4 }}>
                 <span style={{ color: g.emphasisColor, background: g.emphasisHighlight ?? undefined, fontWeight: 700, padding: '0 3px' }}>
                   강조
                 </span>

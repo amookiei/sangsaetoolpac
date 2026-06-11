@@ -3,7 +3,7 @@ import type { Section } from '../state/types';
 import { layoutSection, setFont, type Prim } from './layout';
 import { animById, LINE_DELAY } from '../data/typoAnimations';
 import { evalAnim } from './animEval';
-import { loadImage, imgCache, fillSectionBg, drawShape } from './renderPng';
+import { loadImage, imgCache, fillSectionBg, drawShape, fillTextBold } from './renderPng';
 
 const LEAD_IN = 0.25; // 애니메이션 시작 전 정지 구간(초)
 const HOLD = 0.9; // 종료 후 정지 구간(초)
@@ -154,7 +154,7 @@ function drawStatic(c: CanvasRenderingContext2D, p: Prim) {
   } else {
     c.fillStyle = p.color;
     setFont(c, p.font, p.size, p.weight);
-    c.fillText(p.text, p.x, p.baseline);
+    fillTextBold(c, p.text, p.x, p.baseline, p.size, p.weight);
   }
 }
 
@@ -236,7 +236,7 @@ function drawAnimLine(c: CanvasRenderingContext2D, line: AnimLine, t: number) {
       }
       c.globalAlpha = st.textAlpha !== null ? st.textAlpha : st.opacity;
       c.fillStyle = prim.color;
-      c.fillText(ch, -w / 2, fs * 0.35);
+      fillTextBold(c, ch, -w / 2, fs * 0.35, fs, prim.weight);
       c.restore();
     }
     x += w;

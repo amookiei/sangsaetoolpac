@@ -35,13 +35,15 @@ export function TypoText({
     : 0;
   const cycle = useCycle(anim ? Math.max(totalMs, 2600) : 0);
 
-  if (!anim) return <span style={style}>{text}</span>;
+  // data-ls/data-ci: 작업창 글자 드래그 선택 시 원본 텍스트 인덱스 매핑용
+  if (!anim) return <span style={style} data-ls={charOffset}>{text}</span>;
 
   if (unit === 'line') {
     const delay = (lineIdx * LINE_DELAY) / speed;
     return (
       <span
         key={cycle}
+        data-ls={charOffset}
         style={{
           ...style,
           display: 'inline-block',
@@ -59,6 +61,7 @@ export function TypoText({
       {[...text].map((ch, i) => (
         <span
           key={i}
+          data-ci={charOffset + i}
           style={{
             display: 'inline-block',
             whiteSpace: 'pre',

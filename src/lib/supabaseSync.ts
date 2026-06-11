@@ -146,6 +146,15 @@ function startCloudPush() {
   });
 }
 
+/** 중간 저장 — 디바운스를 기다리지 않고 즉시 클라우드에 push */
+export async function flushCloudNow() {
+  if (!supabase) return;
+  const s = useStore.getState();
+  for (const p of s.projects) dirtyProjects.add(p.id);
+  if (s.isAdmin) refsDirty = true;
+  await flush();
+}
+
 /** 로그인 직후 호출 — 클라우드 데이터 pull + 로컬 전용 데이터 push + 실시간 push 시작 */
 export async function initialSync() {
   if (!supabase) return;

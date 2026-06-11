@@ -46,6 +46,9 @@ export interface Block {
   fontSize: number;
   color: string;
   highlight: string | null; // 폰트 배경(형광펜) 색
+  hlRadius?: number; // 형광펜 라운딩 (기본 4)
+  hlPad?: number; // 형광펜 좌우 넓이/패딩 (기본 8)
+  styleId?: string | null; // 블록 특성 — 'heading' 또는 BodyStyle.id
   align: 'left' | 'center' | 'right';
   bold: boolean;
   animation: string | null; // 타이포/이미지 애니메이션 프리셋 id
@@ -67,6 +70,23 @@ export interface BgGrad {
 
 export type NumberShape = 'circle' | 'triangle' | 'square' | 'underline';
 
+/** 내용(본문) 스타일 — 가이드에 여러 개 등록 가능 */
+export interface BodyStyle {
+  id: string;
+  name: string; // 예: 내용 스타일 1
+  font: string;
+  size: number;
+  color: string;
+}
+
+/** 저장된 그라데이션 프리셋 */
+export interface GradPreset {
+  id: string;
+  color1: string;
+  color2: string;
+  angle: number;
+}
+
 /** 디자인 스타일 가이드 — 제목/내용/숫자/배경색/그라데이션 섹션으로 정립 후 전체 적용 */
 export interface StyleGuide {
   // 제목
@@ -74,10 +94,8 @@ export interface StyleGuide {
   headingSize: number;
   headingColor: string;
   headingBold: boolean;
-  // 내용
-  bodyFont: string;
-  bodySize: number;
-  bodyColor: string;
+  // 내용 — 여러 스타일 등록 가능
+  bodyStyles: BodyStyle[];
   // 강조
   emphasisColor: string;
   emphasisHighlight: string | null;
@@ -89,10 +107,9 @@ export interface StyleGuide {
   // 배경색
   pageBg: string;
   cardBg: string;
-  // 그라데이션
-  gradEnabled: boolean;
-  gradColor2: string;
-  gradAngle: number;
+  // 그라데이션 — 여러 개 저장
+  gradients: GradPreset[];
+  gradEnabled: boolean; // 전체 적용 시 1번 그라데이션 사용
 }
 
 export interface Section {

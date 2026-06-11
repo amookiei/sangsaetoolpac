@@ -242,6 +242,19 @@ textarea.img-desc { resize: vertical; outline: none; min-height: 60px; }
 }
 .resize-handle:hover { opacity: 1; }
 .resize-handle.top { bottom: auto; top: -7px; }
+.block-drag {
+  position: absolute; left: -30px; top: 2px; width: 22px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; color: var(--ink-3); cursor: grab; border-radius: 6px;
+  background: #fff; border: 1px solid var(--line); opacity: 0;
+  transition: opacity 0.12s; z-index: 5; user-select: none;
+}
+.ed-block:hover .block-drag, .ed-block.sel .block-drag { opacity: 1; }
+.block-drag:active { cursor: grabbing; }
+.ed-block { user-select: text; }
+.sg-body-style { margin-top: 8px; }
+.run-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.run-row .run-label { font-size: 12.5px; font-weight: 700; color: var(--ink-2); width: 48px; flex-shrink: 0; }
 .ed-sec-item.dragging { opacity: 0.4; }
 .ed-sec-item.drag-over { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(217, 119, 87, 0.25); }
 .ed-inspector { width: 300px; flex-shrink: 0; position: sticky; top: 78px; max-height: calc(100vh - 140px); overflow-y: auto; }
