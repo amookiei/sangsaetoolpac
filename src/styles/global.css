@@ -253,6 +253,8 @@ textarea.img-desc { resize: vertical; outline: none; min-height: 60px; }
 .block-drag:active { cursor: grabbing; }
 .ed-block { user-select: text; }
 .sg-body-style { margin-top: 8px; }
+.panel-caption { font-size: 11.5px; font-weight: 800; color: var(--ink-3); margin-bottom: 8px; letter-spacing: 0.2px; }
+.ed-canvas ::selection { background: rgba(217, 119, 87, 0.35); }
 .run-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
 .run-row .run-label { font-size: 12.5px; font-weight: 700; color: var(--ink-2); width: 48px; flex-shrink: 0; }
 .ed-sec-item.dragging { opacity: 0.4; }

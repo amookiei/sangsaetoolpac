@@ -1,11 +1,12 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { Block, Section } from '../../state/types';
 import { TypoText, AnimBox } from './TypoText';
+import { useCycle } from './useCycle';
 import { segmentLine } from '../../utils/richText';
-import { effectiveUnit } from '../../data/typoAnimations';
+import { animById, effectiveUnit, LINE_DELAY } from '../../data/typoAnimations';
 
 /**
- * 섹션 라이브 미리보기 (HTML 렌더 — 애니메이션 실시간 재생).
+ * 섹션 라이브 미리보기 = 프리뷰창 (애니메이션 실시간 재생 + 글자 드래그 선택).
  * 추출 시에는 동일 데이터를 layout.ts 기반 SVG/PNG/GIF 렌더러가 그린다.
  */
 export function SectionPreview({
@@ -27,10 +28,11 @@ export function SectionPreview({
   onResizeBlock?: (id: string, heightPx: number) => void;
   onResizeTop?: (id: string, padTop: number) => void;
   onReorderBlocks?: (fromId: string, toId: string) => void;
-  /** 작업창에서 글자를 드래그 선택했을 때 (블록 id + 원본 텍스트 인덱스 범위) */
+  /** 프리뷰창에서 글자를 드래그 선택했을 때 (블록 id + 원본 텍스트 인덱스 범위) */
   onTextSelect?: (blockId: string, start: number, end: number) => void;
 }) {
   const dragBlock = useRef<string | null>(null);
+  const [hoverId, setHoverId] = useState<string | null>(null);
 
   // 블록 하단 핸들 드래그 — 상단 고정, 아래로 늘어남
   const startResize = (e: React.PointerEvent, blockId: string) => {
@@ -65,7 +67,7 @@ export function SectionPreview({
     window.addEventListener('pointerup', up);
   };
 
-  // 작업창에서 글자 드래그 선택 → 원본 텍스트 인덱스로 변환
+  // 프리뷰창에서 글자 드래그 선택 → 원본 텍스트 인덱스로 변환
   const handleMouseUp = () => {
     if (!onTextSelect) return;
     const sel = window.getSelection();
@@ -114,6 +116,8 @@ export function SectionPreview({
               e.stopPropagation();
               onSelectBlock(b.id);
             }}
+            onMouseEnter={() => setHoverId(b.id)}
+            onMouseLeave={() => setHoverId((h) => (h === b.id ? null : h))}
             onDragOver={(e) => {
               if (dragBlock.current) e.preventDefault();
             }}
@@ -149,7 +153,7 @@ export function SectionPreview({
                 onPointerDown={(e) => startResizeTop(e, b)}
               />
             )}
-            <BlockView b={b} />
+            <BlockView b={b} selected={selectedBlock === b.id} hovered={hoverId === b.id} />
             {selectedBlock === b.id && onResizeBlock && (
               <div
                 className="resize-handle"
@@ -188,11 +192,39 @@ function splitWithOffsets(text: string): { line: string; startIdx: number }[] {
   return out;
 }
 
-function BlockView({ b }: { b: Block }) {
+/**
+ * 블록 렌더.
+ * - selected: 정적 텍스트로 전환 → 음절 단위 드래그 선택이 부드럽게 동작
+ * - hovered: 애니메이션 사이클 재시작 정지 → 드래그 중 리마운트로 선택이 끊기지 않음
+ */
+function BlockView({ b, selected, hovered }: { b: Block; selected: boolean; hovered: boolean }) {
+  const weight = b.bold || b.kind === 'heading' ? 800 : 400;
+  const unit = effectiveUnit(b.animation, b.animUnit);
+  const speed = b.animSpeed ?? 1;
+  const hlPad = b.hlPad ?? 8;
+  const hlRadius = b.hlRadius ?? 4;
+  const isText = b.kind !== 'image' && !b.numberShape;
+  const animActive = isText && !!b.animation && !selected;
+
+  // 블록 단위 공유 사이클 — 모든 줄이 함께 다시 재생 (빈 줄 포함 블록도 정상 동작)
+  const anim = animById(b.animation);
+  let periodMs = 0;
+  if (animActive && anim) {
+    const dur = Math.max(anim.duration, 0.3) / speed;
+    const stagger = (anim.stagger || 0.06) / speed;
+    const lineCount = b.text.split('\n').length;
+    periodMs =
+      unit === 'line'
+        ? (((lineCount - 1) * LINE_DELAY) / speed + dur) * 1000 + 1400
+        : (b.text.length * stagger + dur) * 1000 + 1400;
+    periodMs = Math.max(periodMs, 2600);
+  }
+  const cycle = useCycle(hovered ? 0 : periodMs);
+
   if (b.kind === 'image') {
     if (b.imageDataUrl) {
       return (
-        <AnimBox animId={b.animation} speed={b.animSpeed ?? 1}>
+        <AnimBox animId={b.animation} speed={speed}>
           <img src={b.imageDataUrl} style={{ width: '100%', borderRadius: 2, display: 'block' }} />
         </AnimBox>
       );
@@ -206,12 +238,6 @@ function BlockView({ b }: { b: Block }) {
       </div>
     );
   }
-
-  const weight = b.bold || b.kind === 'heading' ? 800 : 400;
-  const unit = effectiveUnit(b.animation, b.animUnit);
-  const speed = b.animSpeed ?? 1;
-  const hlPad = b.hlPad ?? 8;
-  const hlRadius = b.hlRadius ?? 4;
 
   // 숫자 뱃지 — 동그라미/세모/네모/밑줄
   if (b.numberShape) {
@@ -258,61 +284,86 @@ function BlockView({ b }: { b: Block }) {
     );
   }
 
-  // 부분 스타일(runs): 줄을 스타일 세그먼트로 나눠 렌더
+  const lines = splitWithOffsets(b.text);
+  const emptyLineH = Math.round(b.fontSize * 0.93); // layout.ts의 빈 줄 높이(0.6 * lineH)와 일치
+
+  // 부분 스타일(runs): 줄을 스타일 세그먼트로 나눠 렌더 — 애니메이션도 세그먼트별 적용
   if (b.runs?.length) {
-    const lines = splitWithOffsets(b.text);
     return (
       <div style={{ textAlign: b.align, lineHeight: 1.55, fontFamily: `"${b.font}", "Noto Sans KR", sans-serif`, fontSize: b.fontSize }}>
-        {lines.map(({ line, startIdx }, i) => (
-          <div key={i}>
-            {segmentLine(b, line, startIdx).map((seg, si) => (
-              <span
-                key={si}
-                data-ls={seg.startIdx}
-                style={{
+        {lines.map(({ line, startIdx }, i) =>
+          line === '' ? (
+            <div key={i} style={{ height: emptyLineH }} />
+          ) : (
+            <div key={i}>
+              {segmentLine(b, line, startIdx).map((seg, si) => {
+                const segStyle: React.CSSProperties = {
                   fontWeight: seg.style.bold ? 800 : 400,
                   color: seg.style.color,
                   background: seg.style.highlight ?? undefined,
                   padding: seg.style.highlight ? `0 ${hlPad}px` : undefined,
                   borderRadius: seg.style.highlight ? hlRadius : undefined,
-                }}
-              >
-                {seg.text}
-              </span>
-            ))}
-          </div>
-        ))}
+                };
+                return animActive ? (
+                  <TypoText
+                    key={si}
+                    text={seg.text}
+                    animId={b.animation}
+                    unit={unit}
+                    speed={speed}
+                    charOffset={seg.startIdx}
+                    lineIdx={i}
+                    cycle={cycle}
+                    style={segStyle}
+                  />
+                ) : (
+                  <span key={si} data-ls={seg.startIdx} style={segStyle}>
+                    {seg.text}
+                  </span>
+                );
+              })}
+            </div>
+          ),
+        )}
       </div>
     );
   }
 
-  // 글자별 단위는 블록 맨 위부터 글자 수를 누적해 순서를 이어간다
+  // 일반 텍스트 — 글자별 단위는 블록 맨 위부터 누적 순서 (빈 줄도 높이 유지)
+  const lineStyle: React.CSSProperties = {
+    fontFamily: `"${b.font}", "Noto Sans KR", sans-serif`,
+    fontSize: b.fontSize,
+    fontWeight: weight,
+    color: b.color,
+    background: b.highlight ?? undefined,
+    padding: b.highlight ? `0 ${hlPad}px` : undefined,
+    borderRadius: b.highlight ? hlRadius : undefined,
+    boxDecorationBreak: 'clone',
+  };
   return (
     <div style={{ textAlign: b.align, lineHeight: 1.55 }}>
-      {splitWithOffsets(b.text).map(({ line, startIdx }, i) => {
-        return (
+      {lines.map(({ line, startIdx }, i) =>
+        line === '' ? (
+          <div key={i} style={{ height: emptyLineH }} />
+        ) : (
           <div key={i}>
-            <TypoText
-              text={line}
-              animId={b.animation}
-              unit={unit}
-              speed={speed}
-              charOffset={startIdx}
-              lineIdx={i}
-              style={{
-                fontFamily: `"${b.font}", "Noto Sans KR", sans-serif`,
-                fontSize: b.fontSize,
-                fontWeight: weight,
-                color: b.color,
-                background: b.highlight ?? undefined,
-                padding: b.highlight ? `0 ${hlPad}px` : undefined,
-                borderRadius: b.highlight ? hlRadius : undefined,
-                boxDecorationBreak: 'clone',
-              }}
-            />
+            {animActive ? (
+              <TypoText
+                text={line}
+                animId={b.animation}
+                unit={unit}
+                speed={speed}
+                charOffset={startIdx}
+                lineIdx={i}
+                cycle={cycle}
+                style={lineStyle}
+              />
+            ) : (
+              <span data-ls={startIdx} style={lineStyle}>{line}</span>
+            )}
           </div>
-        );
-      })}
+        ),
+      )}
     </div>
   );
 }
