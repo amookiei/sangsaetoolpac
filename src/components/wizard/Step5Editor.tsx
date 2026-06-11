@@ -7,7 +7,6 @@ import { TEMPLATE_GROUPS, TEXT_TEMPLATES, instantiate } from '../../data/textTem
 import { readFileAsDataUrl, imageSize } from '../../utils/files';
 import { addRun, clearRuns, clampRuns } from '../../utils/richText';
 import { translateSections, CONTENT_LANGS, type ContentLang } from '../../utils/translate';
-import { effectiveGeminiKey } from '../../utils/aiImage';
 import { useT } from '../../i18n';
 import { SectionPreview } from '../editor/SectionPreview';
 import { AnimPicker } from '../editor/AnimPicker';
@@ -152,14 +151,9 @@ export function Step5Editor({ project }: { project: Project }) {
             className="btn subtle sm"
             disabled={transBusy}
             onClick={async () => {
-              const key = effectiveGeminiKey(ai);
-              if (!key) {
-                alert('본문 번역에는 Gemini API 키가 필요합니다. 6단계에서 키를 입력해 주세요 (AI Studio 무료 발급).');
-                return;
-              }
               setTransBusy(true);
               try {
-                const sections = await translateSections(project, transLang, key);
+                const sections = await translateSections(project, transLang, ai);
                 updateProject(project.id, { sections });
               } catch (e) {
                 alert(e instanceof Error ? e.message : '번역 실패');

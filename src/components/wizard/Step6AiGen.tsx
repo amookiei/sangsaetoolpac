@@ -41,34 +41,44 @@ export function Step6AiGen({ project }: { project: Project }) {
       </div>
 
       <div className="card">
-        <strong>생성 엔진 설정</strong>
+        <strong>이미지 생성 엔진</strong>
         <p className="hint">
-          💡 추천: 초반 테스트는 <b>무료 테스트 모드</b>(비용 0원, 무드 플레이스홀더)로 흐름을 잡고,
-          실제 생성은 <b>Gemini 나노바나나</b>(gemini-2.5-flash-image)부터 시작하세요 — Google AI
-          Studio 무료 키로 테스트 가능하고, 옴니버스 레퍼런스 이미지 입력을 지원해 제품 일관성에
-          유리합니다. GPT(gpt-image-1)는 무료 티어가 없어 비용이 발생합니다. 자세한 비교는{' '}
-          <code>docs/AI_IMAGE_API.md</code> 참고.
+          기본 엔진은 <b>GPT(gpt-image-1)</b>입니다 — Vercel 환경변수 <code>OPENAI_API_KEY</code>를
+          설정하면 키 입력 없이 서버 프록시로 안전하게 호출됩니다. 비용 없이 흐름만 확인하려면
+          무료 테스트 모드(플레이스홀더)를 사용하세요. 비교: <code>docs/AI_IMAGE_API.md</code>
         </p>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+          <button
+            className={`chip selectable ${!ai.freeMode && ai.provider === 'openai' ? 'on' : ''}`}
+            onClick={() => setAi({ freeMode: false, provider: 'openai' })}
+          >
+            GPT gpt-image-1 (기본)
+          </button>
+          <button
+            className={`chip selectable ${!ai.freeMode && ai.provider === 'gemini' ? 'on' : ''}`}
+            onClick={() => setAi({ freeMode: false, provider: 'gemini' })}
+          >
+            Gemini 나노바나나
+          </button>
           <button
             className={`chip selectable ${ai.freeMode ? 'on' : ''}`}
             onClick={() => setAi({ freeMode: true })}
           >
             무료 테스트 모드 (0원)
           </button>
-          <button
-            className={`chip selectable ${!ai.freeMode && ai.provider === 'gemini' ? 'on' : ''}`}
-            onClick={() => setAi({ freeMode: false, provider: 'gemini' })}
-          >
-            Gemini 나노바나나 (추천)
-          </button>
-          <button
-            className={`chip selectable ${!ai.freeMode && ai.provider === 'openai' ? 'on' : ''}`}
-            onClick={() => setAi({ freeMode: false, provider: 'openai' })}
-          >
-            OpenAI gpt-image-1
-          </button>
         </div>
+        {!ai.freeMode && ai.provider === 'openai' && (
+          <>
+            <label className="label">OpenAI API 키 (선택 — 서버 환경변수 OPENAI_API_KEY 권장)</label>
+            <input
+              className="input"
+              type="password"
+              placeholder="sk-... (비워두면 Vercel 프록시 /api/openai-image 사용)"
+              value={ai.openaiKey}
+              onChange={(e) => setAi({ openaiKey: e.target.value })}
+            />
+          </>
+        )}
         {!ai.freeMode && ai.provider === 'gemini' && (
           <>
             <label className="label">Gemini API 키 (aistudio.google.com에서 무료 발급)</label>
@@ -81,19 +91,23 @@ export function Step6AiGen({ project }: { project: Project }) {
             />
           </>
         )}
-        {!ai.freeMode && ai.provider === 'openai' && (
-          <>
-            <label className="label">OpenAI API 키</label>
-            <input
-              className="input"
-              type="password"
-              placeholder="sk-..."
-              value={ai.openaiKey}
-              onChange={(e) => setAi({ openaiKey: e.target.value })}
-            />
-            <p className="hint">⚠ 브라우저 직접 호출은 CORS 정책으로 막힐 수 있습니다 — 서버 프록시 가이드: docs/AI_IMAGE_API.md</p>
-          </>
-        )}
+      </div>
+
+      <div className="card" style={{ marginTop: 12 }}>
+        <strong>카피·번역 엔진 (Claude)</strong>
+        <p className="hint">
+          3단계 후킹멘트, 4단계 기획안, 본문 번역은 <b>Claude(claude-opus-4-8)</b>가 작성합니다.
+          우선순위: 아래 입력 키 → Vercel 환경변수 <code>ANTHROPIC_API_KEY</code>(권장, 키 노출
+          없음) → Gemini 폴백 → 템플릿.
+        </p>
+        <label className="label">Claude API 키 (선택 — 서버 환경변수 권장)</label>
+        <input
+          className="input"
+          type="password"
+          placeholder="sk-ant-... (비워두면 Vercel 프록시 /api/claude 사용)"
+          value={ai.claudeKey ?? ''}
+          onChange={(e) => setAi({ claudeKey: e.target.value })}
+        />
       </div>
 
       {err && (

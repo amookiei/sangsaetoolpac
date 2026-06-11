@@ -1,5 +1,10 @@
 # AI 이미지 생성 API 선택 가이드 — 나노바나나 vs GPT
 
+> **2026-06 업데이트**: 현재 앱 기본 구성은 **이미지 생성 = GPT(gpt-image-1, `/api/openai-image`
+> 프록시 + `OPENAI_API_KEY`)**, **카피·번역 = Claude(claude-opus-4-8, `/api/claude` 프록시 +
+> `ANTHROPIC_API_KEY`)** 입니다. Gemini는 이미지 대체 엔진·카피 폴백으로 유지됩니다.
+> 아래는 초기 비교 자료입니다.
+
 ## 결론 (추천)
 
 **1순위: Gemini 나노바나나(`gemini-2.5-flash-image`)** — 이유:

@@ -116,9 +116,10 @@ export interface CustomFont {
 
 export type AiProvider = 'gemini' | 'openai';
 export interface AiConfig {
-  provider: AiProvider;
+  provider: AiProvider; // 이미지 생성 엔진 (기본: openai)
   geminiKey: string;
   openaiKey: string;
+  claudeKey?: string; // 카피·번역용 Claude API 키 (서버 ANTHROPIC_API_KEY 권장)
   freeMode: boolean; // 무료 테스트 모드 (로컬 플레이스홀더 생성)
 }
 

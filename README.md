@@ -41,8 +41,9 @@ npm run build    # 프로덕션 빌드
 |---|---|---|
 | `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | 외부 DB + 이메일 로그인 (클라우드 모드) | supabase.com → Settings → API |
 | `VITE_ADMIN_EMAIL` | 클라우드 모드 관리자 이메일 | — |
-| `VITE_GEMINI_KEY` | AI 이미지 생성·본문 번역 기본 키 | aistudio.google.com (무료) |
-| `OPENAI_API_KEY` | gpt-image-1 서버 프록시(`/api/openai-image`) | platform.openai.com (유료) |
+| `ANTHROPIC_API_KEY` | 카피·번역 (Claude, `/api/claude` 프록시) | console.anthropic.com |
+| `OPENAI_API_KEY` | 이미지 생성 기본 엔진 (gpt-image-1, `/api/openai-image` 프록시) | platform.openai.com |
+| `VITE_GEMINI_KEY` | 이미지 대체 엔진 + 카피 폴백 | aistudio.google.com (무료) |
 
 Supabase 테이블 생성: `supabase/schema.sql`을 SQL Editor에서 실행 → 상세 절차는
 [docs/DATABASE.md](docs/DATABASE.md) 체크리스트 참고.
