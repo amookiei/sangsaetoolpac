@@ -284,9 +284,11 @@ export function layoutSection(section: Section, width: number): SectionLayout {
           const baseline = y + b.fontSize;
           segs.forEach((s, si) => {
             if (s.style.highlight) {
+              const pad = b.hlPad ?? 8;
               prims.push({
-                type: 'rect', x: sx - 2, y: y + b.fontSize * 0.08,
-                w: widths[si] + 4, h: b.fontSize * 1.3, color: s.style.highlight, rx: 4,
+                type: 'rect', x: sx - pad, y: y + b.fontSize * 0.08,
+                w: widths[si] + pad * 2, h: b.fontSize * 1.3, color: s.style.highlight,
+                rx: b.hlRadius ?? 4,
               });
             }
             let charXs: number[] | null = null;
@@ -328,14 +330,15 @@ export function layoutSection(section: Section, width: number): SectionLayout {
         const x = b.align === 'left' ? PAD_X : b.align === 'right' ? width - PAD_X - tw : (width - tw) / 2;
         const baseline = y + b.fontSize;
         if (b.highlight) {
+          const pad = b.hlPad ?? 8;
           prims.push({
             type: 'rect',
-            x: x - 8,
+            x: x - pad,
             y: y + b.fontSize * 0.08,
-            w: tw + 16,
+            w: tw + pad * 2,
             h: b.fontSize * 1.3,
             color: b.highlight,
-            rx: 4,
+            rx: b.hlRadius ?? 4,
           });
         }
         let charXs: number[] | null = null;

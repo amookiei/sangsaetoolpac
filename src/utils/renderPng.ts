@@ -1,6 +1,34 @@
 import type { Section } from '../state/types';
 import { layoutSection, setFont, gradPoints, type Prim, type SectionLayout } from './layout';
 
+/**
+ * 굵게 보강 텍스트 그리기 (PNG·GIF 공용).
+ * 캔버스는 폰트에 700+ 웨이트가 없으면 가짜 볼드를 합성하지 않아
+ * 굵게가 안 보이는 경우가 있다 → 같은 색 스트로크를 겹쳐 보강.
+ */
+export function fillTextBold(
+  c: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  size: number,
+  weight: number,
+) {
+  c.fillText(text, x, y);
+  if (weight >= 700) {
+    const prevStroke = c.strokeStyle;
+    const prevWidth = c.lineWidth;
+    const prevJoin = c.lineJoin;
+    c.strokeStyle = c.fillStyle;
+    c.lineWidth = Math.max(size / 30, 0.7);
+    c.lineJoin = 'round';
+    c.strokeText(text, x, y);
+    c.strokeStyle = prevStroke;
+    c.lineWidth = prevWidth;
+    c.lineJoin = prevJoin;
+  }
+}
+
 /** 숫자 뱃지 도형 그리기 (PNG·GIF 공용) */
 export function drawShape(c: CanvasRenderingContext2D, p: Extract<Prim, { type: 'shape' }>) {
   c.fillStyle = p.color;
@@ -106,7 +134,7 @@ export async function renderPngCanvas(
     } else {
       c.fillStyle = p.color;
       setFont(c, p.font, p.size, p.weight);
-      c.fillText(p.text, p.x, p.baseline);
+      fillTextBold(c, p.text, p.x, p.baseline, p.size, p.weight);
     }
   }
 

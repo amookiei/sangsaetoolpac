@@ -5,7 +5,8 @@ import { PLATFORM_WIDTH } from '../../data/categories';
 import { applyStyleGuide, guideOf } from '../../data/styleGuide';
 import { TEMPLATE_GROUPS, TEXT_TEMPLATES, instantiate } from '../../data/textTemplates';
 import { readFileAsDataUrl, imageSize } from '../../utils/files';
-import { addRun, clearRuns, clampRuns } from '../../utils/richText';
+import { addRun, clearRuns, clampRuns, isRangeBold } from '../../utils/richText';
+import { bodyStyleOf } from '../../data/styleGuide';
 import { translateSections, CONTENT_LANGS, type ContentLang } from '../../utils/translate';
 import { useT } from '../../i18n';
 import { CLIP_ANIMS, effectiveUnit } from '../../data/typoAnimations';
@@ -274,6 +275,19 @@ export function Step5Editor({ project }: { project: Project }) {
                 zoom={scale}
                 onResizeBlock={(bid, h) => patchBlockById(bid, { heightPx: h })}
                 onResizeTop={(bid, p) => patchBlockById(bid, { padTop: p || null })}
+                onReorderBlocks={(fromId, toId) => {
+                  const blocks = [...sec.blocks];
+                  const fromIdx = blocks.findIndex((b) => b.id === fromId);
+                  const toIdx = blocks.findIndex((b) => b.id === toId);
+                  if (fromIdx < 0 || toIdx < 0) return;
+                  const [moved] = blocks.splice(fromIdx, 1);
+                  blocks.splice(toIdx, 0, moved);
+                  updateSection(project.id, sec.id, { blocks });
+                }}
+                onTextSelect={(blockId, start, end) => {
+                  setSelBlock(blockId);
+                  setSelRange({ start, end });
+                }}
               />
             </div>
           </div>
@@ -326,6 +340,30 @@ export function Step5Editor({ project }: { project: Project }) {
               />
             </>
           )}
+          {guide.gradients.length > 0 && (
+            <>
+              <label className="label">저장된 그라데이션 (스타일 정립에서 관리)</label>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {guide.gradients.map((gr, i) => (
+                  <button
+                    key={gr.id}
+                    title={`${i + 1}번 그라데이션 적용`}
+                    onClick={() =>
+                      updateSection(project.id, sec.id, {
+                        bg: gr.color1,
+                        bgGrad: { color2: gr.color2, angle: gr.angle },
+                      })
+                    }
+                    style={{
+                      width: 44, height: 26, borderRadius: 7, cursor: 'pointer',
+                      border: '1.5px solid var(--line)',
+                      background: `linear-gradient(${gr.angle}deg, ${gr.color1}, ${gr.color2})`,
+                    }}
+                  />
+                ))}
+              </div>
+            </>
+          )}
 
           <label className="label">전체 폰트 한 번에 적용</label>
           <select className="input" value={project.globalFont} onChange={(e) => applyFontToAll(e.target.value)}>
@@ -367,52 +405,68 @@ export function Step5Editor({ project }: { project: Project }) {
                   setSelRange({ start: el.selectionStart, end: el.selectionEnd });
                 }}
               />
-              <label className="label">부분 스타일 — 위 입력창에서 글자를 드래그한 뒤 적용</label>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                <button
-                  className="btn subtle sm"
-                  disabled={!selRange || selRange.start === selRange.end}
-                  onClick={() =>
-                    selRange && patchBlock({ runs: addRun(block.runs, { ...selRange, bold: true }) })
-                  }
-                >
-                  B 굵게
-                </button>
-                <input type="color" value={runColor} onChange={(e) => setRunColor(e.target.value)} />
-                <button
-                  className="btn subtle sm"
-                  disabled={!selRange || selRange.start === selRange.end}
-                  onClick={() =>
-                    selRange && patchBlock({ runs: addRun(block.runs, { ...selRange, color: runColor }) })
-                  }
-                >
-                  색 적용
-                </button>
-                <input type="color" value={runHl} onChange={(e) => setRunHl(e.target.value)} />
-                <button
-                  className="btn subtle sm"
-                  disabled={!selRange || selRange.start === selRange.end}
-                  onClick={() =>
-                    selRange && patchBlock({ runs: addRun(block.runs, { ...selRange, highlight: runHl }) })
-                  }
-                >
-                  형광펜
-                </button>
-                <button
-                  className="btn subtle sm"
-                  disabled={!selRange || selRange.start === selRange.end || !block.runs?.length}
-                  onClick={() =>
-                    selRange && patchBlock({ runs: clearRuns(block.runs, selRange.start, selRange.end) })
-                  }
-                >
-                  지우기
-                </button>
-              </div>
-              {selRange && selRange.start !== selRange.end && (
-                <p className="hint" style={{ marginTop: 6 }}>
-                  선택됨: “{block.text.slice(selRange.start, selRange.end)}”
-                </p>
-              )}
+              <label className="label">부분 스타일 — 작업창(캔버스)이나 위 입력창에서 글자를 드래그한 뒤 적용</label>
+              {(() => {
+                const hasSel = !!selRange && selRange.start !== selRange.end;
+                const allBold = hasSel && isRangeBold(block, selRange!.start, selRange!.end);
+                return (
+                  <>
+                    <div className="run-row">
+                      <span className="run-label">굵게</span>
+                      <button
+                        className={`btn subtle sm ${allBold ? 'on' : ''}`}
+                        disabled={!hasSel}
+                        onClick={() =>
+                          selRange &&
+                          patchBlock({ runs: addRun(block.runs, { ...selRange, bold: !allBold }) })
+                        }
+                      >
+                        {allBold ? 'B 굵게 해제' : 'B 굵게'}
+                      </button>
+                    </div>
+                    <div className="run-row">
+                      <span className="run-label">글자색</span>
+                      <input type="color" value={runColor} onChange={(e) => setRunColor(e.target.value)} />
+                      <button
+                        className="btn subtle sm"
+                        disabled={!hasSel}
+                        onClick={() =>
+                          selRange && patchBlock({ runs: addRun(block.runs, { ...selRange, color: runColor }) })
+                        }
+                      >
+                        적용
+                      </button>
+                    </div>
+                    <div className="run-row">
+                      <span className="run-label">형광펜</span>
+                      <input type="color" value={runHl} onChange={(e) => setRunHl(e.target.value)} />
+                      <button
+                        className="btn subtle sm"
+                        disabled={!hasSel}
+                        onClick={() =>
+                          selRange && patchBlock({ runs: addRun(block.runs, { ...selRange, highlight: runHl }) })
+                        }
+                      >
+                        적용
+                      </button>
+                      <button
+                        className="btn subtle sm"
+                        disabled={!hasSel || !block.runs?.length}
+                        onClick={() =>
+                          selRange && patchBlock({ runs: clearRuns(block.runs, selRange.start, selRange.end) })
+                        }
+                      >
+                        스타일 지우기
+                      </button>
+                    </div>
+                    {hasSel && (
+                      <p className="hint" style={{ marginTop: 6 }}>
+                        선택됨: “{block.text.slice(selRange!.start, selRange!.end)}”
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
               <button
                 className="btn ghost sm"
                 style={{ marginTop: 8 }}
@@ -426,6 +480,39 @@ export function Step5Editor({ project }: { project: Project }) {
               >
                 ✨ 강조 스타일 적용
               </button>
+              <label className="label">블록 특성 (스타일 정립과 연동)</label>
+              <select
+                className="input"
+                value={block.styleId ?? (block.kind === 'heading' ? 'heading' : guide.bodyStyles[0].id)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === 'heading') {
+                    patchBlock({
+                      kind: 'heading',
+                      styleId: 'heading',
+                      font: guide.headingFont,
+                      fontSize: guide.headingSize,
+                      color: guide.headingColor,
+                      bold: guide.headingBold,
+                    });
+                  } else {
+                    const st = bodyStyleOf(guide, v);
+                    patchBlock({
+                      kind: 'body',
+                      styleId: st.id,
+                      font: st.font,
+                      fontSize: st.size,
+                      color: st.color,
+                      bold: false,
+                    });
+                  }
+                }}
+              >
+                <option value="heading">제목</option>
+                {guide.bodyStyles.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
               <label className="label">폰트</label>
               <select className="input" value={block.font} onChange={(e) => patchBlock({ font: e.target.value })}>
                 {allFonts.map((f) => (
@@ -476,6 +563,22 @@ export function Step5Editor({ project }: { project: Project }) {
                   />
                 ))}
               </div>
+              {(block.highlight || block.runs?.some((r) => r.highlight)) && (
+                <>
+                  <label className="label">형광펜 라운딩 · {block.hlRadius ?? 4}px</label>
+                  <input
+                    type="range" min={0} max={24} value={block.hlRadius ?? 4}
+                    style={{ width: '100%' }}
+                    onChange={(e) => patchBlock({ hlRadius: +e.target.value })}
+                  />
+                  <label className="label">형광펜 넓이(좌우) · {block.hlPad ?? 8}px</label>
+                  <input
+                    type="range" min={0} max={24} value={block.hlPad ?? 8}
+                    style={{ width: '100%' }}
+                    onChange={(e) => patchBlock({ hlPad: +e.target.value })}
+                  />
+                </>
+              )}
               <label className="label">카드 배경 (블록 전체 박스)</label>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 <button className={`chip selectable ${!block.cardBg ? 'on' : ''}`} onClick={() => patchBlock({ cardBg: null })}>

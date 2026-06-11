@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import type { Block, Section } from '../../state/types';
 import { TypoText, AnimBox } from './TypoText';
 import { segmentLine } from '../../utils/richText';
@@ -15,6 +16,8 @@ export function SectionPreview({
   zoom = 1,
   onResizeBlock,
   onResizeTop,
+  onReorderBlocks,
+  onTextSelect,
 }: {
   section: Section;
   width: number;
@@ -23,7 +26,12 @@ export function SectionPreview({
   zoom?: number;
   onResizeBlock?: (id: string, heightPx: number) => void;
   onResizeTop?: (id: string, padTop: number) => void;
+  onReorderBlocks?: (fromId: string, toId: string) => void;
+  /** 작업창에서 글자를 드래그 선택했을 때 (블록 id + 원본 텍스트 인덱스 범위) */
+  onTextSelect?: (blockId: string, start: number, end: number) => void;
 }) {
+  const dragBlock = useRef<string | null>(null);
+
   // 블록 하단 핸들 드래그 — 상단 고정, 아래로 늘어남
   const startResize = (e: React.PointerEvent, blockId: string) => {
     e.stopPropagation();
@@ -57,6 +65,30 @@ export function SectionPreview({
     window.addEventListener('pointerup', up);
   };
 
+  // 작업창에서 글자 드래그 선택 → 원본 텍스트 인덱스로 변환
+  const handleMouseUp = () => {
+    if (!onTextSelect) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.anchorNode || !sel.focusNode) return;
+    const pos = (node: Node, off: number): { idx: number; el: HTMLElement } | null => {
+      const el = node instanceof Element ? node : node.parentElement;
+      const ci = el?.closest('[data-ci]') as HTMLElement | null;
+      if (ci) return { idx: +ci.dataset.ci! + Math.min(off, 1), el: ci };
+      const ls = el?.closest('[data-ls]') as HTMLElement | null;
+      if (ls) return { idx: +ls.dataset.ls! + off, el: ls };
+      return null;
+    };
+    const a = pos(sel.anchorNode, sel.anchorOffset);
+    const f = pos(sel.focusNode, sel.focusOffset);
+    if (!a || !f) return;
+    const aBlock = a.el.closest('[data-block]') as HTMLElement | null;
+    const fBlock = f.el.closest('[data-block]') as HTMLElement | null;
+    if (!aBlock || aBlock !== fBlock) return;
+    const start = Math.min(a.idx, f.idx);
+    const end = Math.max(a.idx, f.idx);
+    if (end > start) onTextSelect(aBlock.dataset.block!, start, end);
+  };
+
   // 연속된 동일 cardBg 블록을 한 카드로 묶음 (layout.ts와 동일 규칙)
   const segs: { cardBg: string | null; blocks: Block[] }[] = [];
   for (const b of section.blocks) {
@@ -71,18 +103,45 @@ export function SectionPreview({
     : section.bg;
 
   return (
-    <div style={{ width, background: bgStyle, padding: '72px 64px' }}>
+    <div style={{ width, background: bgStyle, padding: '72px 64px' }} onMouseUp={handleMouseUp}>
       {segs.map((seg, si) => {
         const inner = seg.blocks.map((b) => (
           <div
             key={b.id}
+            data-block={b.id}
             className={`ed-block ${selectedBlock === b.id ? 'sel' : ''}`}
             onClick={(e) => {
               e.stopPropagation();
               onSelectBlock(b.id);
             }}
+            onDragOver={(e) => {
+              if (dragBlock.current) e.preventDefault();
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (dragBlock.current && dragBlock.current !== b.id) {
+                onReorderBlocks?.(dragBlock.current, b.id);
+              }
+              dragBlock.current = null;
+            }}
             style={{ marginBottom: 32, minHeight: b.heightPx ?? undefined, paddingTop: b.padTop ?? undefined }}
           >
+            {onReorderBlocks && (
+              <div
+                className="block-drag"
+                title="꾹 눌러 드래그하면 블록 순서가 바뀝니다"
+                draggable
+                onDragStart={(e) => {
+                  dragBlock.current = b.id;
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                onDragEnd={() => {
+                  dragBlock.current = null;
+                }}
+              >
+                ⠿
+              </div>
+            )}
             {selectedBlock === b.id && onResizeTop && (
               <div
                 className="resize-handle top"
@@ -151,6 +210,8 @@ function BlockView({ b }: { b: Block }) {
   const weight = b.bold || b.kind === 'heading' ? 800 : 400;
   const unit = effectiveUnit(b.animation, b.animUnit);
   const speed = b.animSpeed ?? 1;
+  const hlPad = b.hlPad ?? 8;
+  const hlRadius = b.hlRadius ?? 4;
 
   // 숫자 뱃지 — 동그라미/세모/네모/밑줄
   if (b.numberShape) {
@@ -207,12 +268,13 @@ function BlockView({ b }: { b: Block }) {
             {segmentLine(b, line, startIdx).map((seg, si) => (
               <span
                 key={si}
+                data-ls={seg.startIdx}
                 style={{
                   fontWeight: seg.style.bold ? 800 : 400,
                   color: seg.style.color,
                   background: seg.style.highlight ?? undefined,
-                  padding: seg.style.highlight ? '0 3px' : undefined,
-                  borderRadius: seg.style.highlight ? 4 : undefined,
+                  padding: seg.style.highlight ? `0 ${hlPad}px` : undefined,
+                  borderRadius: seg.style.highlight ? hlRadius : undefined,
                 }}
               >
                 {seg.text}
@@ -243,8 +305,8 @@ function BlockView({ b }: { b: Block }) {
                 fontWeight: weight,
                 color: b.color,
                 background: b.highlight ?? undefined,
-                padding: b.highlight ? '0 8px' : undefined,
-                borderRadius: b.highlight ? 4 : undefined,
+                padding: b.highlight ? `0 ${hlPad}px` : undefined,
+                borderRadius: b.highlight ? hlRadius : undefined,
                 boxDecorationBreak: 'clone',
               }}
             />
