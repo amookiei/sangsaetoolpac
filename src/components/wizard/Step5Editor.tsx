@@ -17,6 +17,8 @@ import type { Block, Project } from '../../state/types';
 const HIGHLIGHTS = ['#fff176', '#a5f3c4', '#bcd7ff', '#ffc9e0', '#e6d4ff', '#1a1a2e'];
 const CARD_BGS = ['#f6f7f9', '#fff4ec', '#fdf3f8', '#eef4ff', '#ff6b52', '#1a1a2e'];
 
+const uid = () => Math.random().toString(36).slice(2, 10);
+
 /** 5단계: Canva 스타일 디자인 에디터 — 스타일 정립·텍스트 템플릿·폰트·모션 편집 */
 export function Step5Editor({ project }: { project: Project }) {
   const { updateProject, updateSection, customFonts, addCustomFont, ai } = useStore();
@@ -100,7 +102,7 @@ export function Step5Editor({ project }: { project: Project }) {
 
   const addBlock = (kind: Block['kind'], asNumber = false) => {
     const nb: Block = {
-      id: Math.random().toString(36).slice(2, 10),
+      id: uid(),
       kind,
       text: asNumber ? '01' : kind === 'heading' ? '새 제목' : kind === 'body' ? '새 본문 텍스트' : '',
       imageDesc: kind === 'image' ? '[이미지] 직접 업로드하거나 6단계에서 AI 생성' : '',
