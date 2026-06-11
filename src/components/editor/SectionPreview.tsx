@@ -27,12 +27,15 @@ export function SectionPreview({
   zoom?: number;
   onResizeBlock?: (id: string, heightPx: number) => void;
   onResizeTop?: (id: string, padTop: number) => void;
-  onReorderBlocks?: (fromId: string, toId: string) => void;
+  onReorderBlocks?: (fromId: string, toId: string, pos: 'before' | 'after') => void;
   /** 프리뷰창에서 글자를 드래그 선택했을 때 (블록 id + 원본 텍스트 인덱스 범위) */
   onTextSelect?: (blockId: string, start: number, end: number) => void;
 }) {
   const dragBlock = useRef<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
+  // 드래그 중 시각 피드백 — 들어올린 블록(그림자)·드롭 위치(컬러 라인)
+  const [liftingId, setLiftingId] = useState<string | null>(null);
+  const [dropInfo, setDropInfo] = useState<{ id: string; pos: 'before' | 'after' } | null>(null);
 
   // 블록 하단 핸들 드래그 — 상단 고정, 아래로 늘어남
   const startResize = (e: React.PointerEvent, blockId: string) => {
@@ -103,15 +106,50 @@ export function SectionPreview({
   const bgStyle = section.bgGrad
     ? `linear-gradient(${section.bgGrad.angle}deg, ${section.bg}, ${section.bgGrad.color2})`
     : section.bg;
+  const bgLayers = section.bgLayers ?? [];
+  const contentOpacity = section.contentOpacity ?? 1;
 
   return (
-    <div style={{ width, background: bgStyle, padding: '72px 64px' }} onMouseUp={handleMouseUp}>
+    <div
+      style={{ width, background: bgStyle, padding: '72px 64px', position: 'relative' }}
+      onMouseUp={handleMouseUp}
+    >
+      {/* 레이어 2+ — 블록 콘텐츠 아래에 깔리는 배경 레이어 (배열 뒤쪽이 더 아래) */}
+      {[...bgLayers].reverse().map(
+        (L) =>
+          !L.hidden && (
+            <div
+              key={L.id}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                opacity: L.opacity,
+                background: L.imageDataUrl
+                  ? `center / cover no-repeat url(${L.imageDataUrl})`
+                  : (L.color ?? 'transparent'),
+                pointerEvents: 'none',
+              }}
+            />
+          ),
+      )}
+      <div
+        style={{
+          position: 'relative',
+          opacity: contentOpacity,
+          pointerEvents: section.contentLocked ? 'none' : undefined,
+        }}
+      >
       {segs.map((seg, si) => {
         const inner = seg.blocks.map((b) => (
           <div
             key={b.id}
             data-block={b.id}
-            className={`ed-block ${selectedBlock === b.id ? 'sel' : ''}`}
+            className={[
+              'ed-block',
+              selectedBlock === b.id ? 'sel' : '',
+              liftingId === b.id ? 'lifting' : '',
+              dropInfo?.id === b.id && liftingId !== b.id ? `drop-${dropInfo.pos}` : '',
+            ].join(' ')}
             onClick={(e) => {
               e.stopPropagation();
               onSelectBlock(b.id);
@@ -119,14 +157,25 @@ export function SectionPreview({
             onMouseEnter={() => setHoverId(b.id)}
             onMouseLeave={() => setHoverId((h) => (h === b.id ? null : h))}
             onDragOver={(e) => {
-              if (dragBlock.current) e.preventDefault();
+              if (!dragBlock.current) return;
+              e.preventDefault();
+              const r = e.currentTarget.getBoundingClientRect();
+              const pos = e.clientY < r.top + r.height / 2 ? 'before' : 'after';
+              setDropInfo((prev) =>
+                prev?.id === b.id && prev.pos === pos ? prev : { id: b.id, pos },
+              );
             }}
+            onDragLeave={() => setDropInfo((d) => (d?.id === b.id ? null : d))}
             onDrop={(e) => {
               e.preventDefault();
+              const r = e.currentTarget.getBoundingClientRect();
+              const pos = e.clientY < r.top + r.height / 2 ? 'before' : 'after';
               if (dragBlock.current && dragBlock.current !== b.id) {
-                onReorderBlocks?.(dragBlock.current, b.id);
+                onReorderBlocks?.(dragBlock.current, b.id, pos);
               }
               dragBlock.current = null;
+              setLiftingId(null);
+              setDropInfo(null);
             }}
             style={{ marginBottom: 32, minHeight: b.heightPx ?? undefined, paddingTop: b.padTop ?? undefined }}
           >
@@ -137,10 +186,13 @@ export function SectionPreview({
                 draggable
                 onDragStart={(e) => {
                   dragBlock.current = b.id;
+                  setLiftingId(b.id);
                   e.dataTransfer.effectAllowed = 'move';
                 }}
                 onDragEnd={() => {
                   dragBlock.current = null;
+                  setLiftingId(null);
+                  setDropInfo(null);
                 }}
               >
                 ⠿
@@ -178,6 +230,7 @@ export function SectionPreview({
           </div>
         );
       })}
+      </div>
     </div>
   );
 }

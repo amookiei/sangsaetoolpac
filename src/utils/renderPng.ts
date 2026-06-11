@@ -64,6 +64,41 @@ export function fillSectionBg(c: CanvasRenderingContext2D, lay: SectionLayout, w
   c.fillRect(0, 0, w, h);
 }
 
+/** 이미지를 영역에 cover 방식으로 그리기 (배경 레이어용) */
+export function drawCover(
+  c: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  w: number,
+  h: number,
+) {
+  const s = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+  const dw = img.naturalWidth * s;
+  const dh = img.naturalHeight * s;
+  c.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+}
+
+/** 레이어 2+ (블록 콘텐츠 아래 배경 레이어) 그리기 — PNG·GIF 공용 */
+export async function drawBgLayers(
+  c: CanvasRenderingContext2D,
+  section: Section,
+  w: number,
+  h: number,
+) {
+  for (const L of [...(section.bgLayers ?? [])].reverse()) {
+    if (L.hidden) continue;
+    c.save();
+    c.globalAlpha = L.opacity;
+    if (L.imageDataUrl) {
+      const img = await loadImage(L.imageDataUrl).catch(() => null);
+      if (img) drawCover(c, img, w, h);
+    } else if (L.color) {
+      c.fillStyle = L.color;
+      c.fillRect(0, 0, w, h);
+    }
+    c.restore();
+  }
+}
+
 export const imgCache = new Map<string, HTMLImageElement>();
 export function loadImage(src: string): Promise<HTMLImageElement> {
   const hit = imgCache.get(src);
@@ -98,7 +133,31 @@ export async function renderPngCanvas(
   c.scale(scale, scale);
 
   fillSectionBg(c, lay, width, h);
+  await drawBgLayers(c, section, width, h);
 
+  // 레이어 1(블록 콘텐츠) 불투명도 — 1 미만이면 별도 캔버스에 그려 합성
+  const contentOpacity = section.contentOpacity ?? 1;
+  if (contentOpacity < 1) {
+    const cc = document.createElement('canvas');
+    cc.width = canvas.width;
+    cc.height = canvas.height;
+    const c2 = cc.getContext('2d')!;
+    c2.scale(scale, scale);
+    await drawPrims(c2, lay);
+    c.save();
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.globalAlpha = contentOpacity;
+    c.drawImage(cc, 0, 0);
+    c.restore();
+  } else {
+    await drawPrims(c, lay);
+  }
+
+  return canvas;
+}
+
+/** 레이아웃 프리미티브 일괄 그리기 (정적 — PNG용) */
+async function drawPrims(c: CanvasRenderingContext2D, lay: SectionLayout) {
   for (const p of lay.prims) {
     if (p.type === 'rect') {
       c.fillStyle = p.color;
@@ -137,8 +196,6 @@ export async function renderPngCanvas(
       fillTextBold(c, p.text, p.x, p.baseline, p.size, p.weight);
     }
   }
-
-  return canvas;
 }
 
 export function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {

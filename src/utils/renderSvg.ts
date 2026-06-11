@@ -104,12 +104,29 @@ export function renderSvg(section: Section, width: number, animated: boolean): s
     bgFill = 'url(#bgGrad)';
   }
 
+  // 레이어 2+ (블록 콘텐츠 아래 배경 레이어 — 배열 뒤쪽이 더 아래라 역순으로 그림)
+  const layerParts = [...(section.bgLayers ?? [])]
+    .reverse()
+    .filter((L) => !L.hidden)
+    .map((L) =>
+      L.imageDataUrl
+        ? `<image href="${L.imageDataUrl}" width="${lay.width}" height="${H}" preserveAspectRatio="xMidYMid slice" opacity="${L.opacity}"/>`
+        : L.color
+          ? `<rect width="${lay.width}" height="${H}" fill="${L.color}" opacity="${L.opacity}"/>`
+          : '',
+    );
+
+  const contentOpacity = section.contentOpacity ?? 1;
+  const content =
+    contentOpacity < 1 ? [`<g opacity="${contentOpacity}">`, ...parts, `</g>`] : parts;
+
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${lay.width}" height="${H}" viewBox="0 0 ${lay.width} ${H}">`,
     defs,
     style,
     `<rect width="${lay.width}" height="${H}" fill="${bgFill}"/>`,
-    ...parts,
+    ...layerParts,
+    ...content,
     `</svg>`,
   ].join('\n');
 }
