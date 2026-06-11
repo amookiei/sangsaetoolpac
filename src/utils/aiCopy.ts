@@ -1,30 +1,13 @@
-import type { Project, Section } from '../state/types';
+import type { AiConfig, Project, Section } from '../state/types';
 import { buildSections, type SectionCopy } from '../data/draftGenerator';
 import { CATEGORY_LABEL, PLATFORM_LABEL } from '../data/categories';
+import { callCopyLLM, parseJsonLoose } from './copyLLM';
 
 /**
- * Gemini 기반 AI 카피라이팅 — 기획안 전체를 읽고 상세페이지 문구를 작성한다.
- * 키가 없으면 호출하지 않고 로컬 템플릿(draftGenerator)으로 폴백.
+ * AI 카피라이팅 — 기획안 전체를 읽고 상세페이지 문구를 작성한다.
+ * 엔진은 copyLLM 라우터가 결정 (Claude 우선 → Gemini 폴백).
+ * 엔진이 없으면 throw → 호출부에서 로컬 템플릿으로 폴백.
  */
-
-async function callGemini(prompt: string, key: string): Promise<string> {
-  const res = await fetch(
-    'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json' },
-      }),
-    },
-  );
-  if (!res.ok) throw new Error(`Gemini API 오류 (${res.status}): ${(await res.text()).slice(0, 160)}`);
-  const json = await res.json();
-  const raw = json.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!raw) throw new Error('AI 응답이 비어 있습니다.');
-  return raw;
-}
 
 function productContext(p: Project): string {
   const omni = p.omni
@@ -44,7 +27,7 @@ function productContext(p: Project): string {
 }
 
 /** 후킹멘트 3종 (직설·혜택형 / 호기심·질문형 / 감성·스토리형) AI 생성 */
-export async function generateAiHooks(p: Project, key: string): Promise<string[]> {
+export async function generateAiHooks(p: Project, ai: AiConfig): Promise<string[]> {
   const prompt = [
     `당신은 한국 커머스 상세페이지 전문 카피라이터입니다.`,
     productContext(p),
@@ -53,16 +36,16 @@ export async function generateAiHooks(p: Project, key: string): Promise<string[]
     `2번: 호기심·질문형 (궁금하게 만드는 질문/반전)`,
     `3번: 감성·스토리형 (장면이 그려지는 감성 문장)`,
     `규칙: 각 15~25자, 자연스러운 한국어 조사, 근거 없는 과장(1위, 최고 등) 금지, 제품명 활용 가능.`,
-    `출력: ["멘트1","멘트2","멘트3"] JSON 배열만.`,
+    `출력: ["멘트1","멘트2","멘트3"] JSON 배열만. 다른 텍스트 금지.`,
   ].join('\n\n');
-  const raw = await callGemini(prompt, key);
-  const arr = JSON.parse(raw);
+  const raw = await callCopyLLM(prompt, ai);
+  const arr = parseJsonLoose<string[]>(raw);
   if (!Array.isArray(arr) || arr.length < 3) throw new Error('후킹멘트 생성 결과가 올바르지 않습니다.');
   return arr.slice(0, 3).map(String);
 }
 
 /** 구조별 섹션 카피(헤드라인·본문·이미지 묘사) AI 생성 */
-export async function generateAiSections(p: Project, key: string): Promise<Section[]> {
+export async function generateAiSections(p: Project, ai: AiConfig): Promise<Section[]> {
   const structure = p.structure.map((s, i) => `${i + 1}. ${s.name} — ${s.purpose}`).join('\n');
   const prompt = [
     `당신은 한국 커머스 상세페이지 전문 카피라이터입니다.`,
@@ -77,11 +60,11 @@ export async function generateAiSections(p: Project, key: string): Promise<Secti
       `- imageDesc: 그 자리에 들어갈 이미지를 디자이너에게 지시하듯 구체적으로. "[컷 종류]"로 시작 (예: [제품 클로즈업], [비교표], [사용 장면컷]). 옴니버스 자산이 있으면 동일 외형 유지 지시 포함.`,
       `- 근거 없는 과장 표현(최고, 1위, 100% 등) 금지. 식품이면 효능 과장 금지.`,
     ].join('\n'),
-    `출력: {"sections":[{"heading":"","body":"","imageDesc":""}, ...]} — 정확히 ${p.structure.length}개, JSON만.`,
+    `출력: {"sections":[{"heading":"","body":"","imageDesc":""}, ...]} — 정확히 ${p.structure.length}개, JSON만. 다른 텍스트 금지.`,
   ].join('\n\n');
 
-  const raw = await callGemini(prompt, key);
-  const parsed = JSON.parse(raw) as { sections?: SectionCopy[] };
+  const raw = await callCopyLLM(prompt, ai);
+  const parsed = parseJsonLoose<{ sections?: SectionCopy[] }>(raw);
   const copies = parsed.sections;
   if (!Array.isArray(copies) || copies.length !== p.structure.length) {
     throw new Error(`AI가 ${copies?.length ?? 0}개 섹션을 반환했습니다 (구조는 ${p.structure.length}개) — 다시 시도해 주세요.`);

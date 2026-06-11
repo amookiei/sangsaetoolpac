@@ -2,31 +2,26 @@ import { useState } from 'react';
 import { useStore } from '../../state/store';
 import { generateSections } from '../../data/draftGenerator';
 import { generateAiSections } from '../../utils/aiCopy';
-import { effectiveGeminiKey } from '../../utils/aiImage';
 import type { Block, Project } from '../../state/types';
 
-/** 4단계: 구조별 상세 기획안 — Gemini 키 있으면 AI 카피, 없으면 템플릿 폴백 */
+/** 4단계: 구조별 상세 기획안 — AI(Claude→Gemini) 우선, 실패 시 템플릿 폴백 */
 export function Step4Draft({ project }: { project: Project }) {
   const { updateProject, updateSection, ai } = useStore();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const key = effectiveGeminiKey(ai);
 
   const generate = async () => {
     setErr('');
-    if (key) {
-      setBusy(true);
-      try {
-        const sections = await generateAiSections(project, key);
-        updateProject(project.id, { sections });
-        return;
-      } catch (e) {
-        setErr(`AI 생성 실패 — 템플릿으로 대체했어요. (${e instanceof Error ? e.message : ''})`);
-      } finally {
-        setBusy(false);
-      }
+    setBusy(true);
+    try {
+      const sections = await generateAiSections(project, ai);
+      updateProject(project.id, { sections });
+    } catch (e) {
+      updateProject(project.id, { sections: generateSections(project) });
+      setErr(`템플릿으로 생성했어요 — ${e instanceof Error ? e.message : 'AI 사용 불가'}`);
+    } finally {
+      setBusy(false);
     }
-    updateProject(project.id, { sections: generateSections(project) });
   };
 
   const patchBlock = (sid: string, bid: string, patch: Partial<Block>) => {
@@ -44,14 +39,10 @@ export function Step4Draft({ project }: { project: Project }) {
           {busy
             ? '✨ 기획안을 읽고 작성 중…'
             : project.sections.length === 0
-              ? key ? '✨ AI 기획안 생성' : '✨ 기획안 생성'
-              : key ? '✨ AI로 전체 다시 생성' : '↻ 전체 다시 생성'}
+              ? '✨ AI 기획안 생성'
+              : '✨ AI로 전체 다시 생성'}
         </button>
-        {!key && (
-          <span className="hint">
-            Gemini 키를 연결하면(6단계 또는 VITE_GEMINI_KEY) 기획안 내용을 반영한 AI 카피로 생성됩니다
-          </span>
-        )}
+        <span className="hint">기획안을 읽고 Claude가 작성합니다 (미연결 시 템플릿)</span>
       </div>
       {err && <p className="hint" style={{ color: '#b3412e', marginBottom: 12 }}>{err}</p>}
       <p className="hint" style={{ marginBottom: 18 }}>

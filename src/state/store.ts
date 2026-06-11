@@ -156,7 +156,7 @@ export const useStore = create<AppState>()(
 
       customFonts: [],
       addCustomFont: (f) => set({ customFonts: [...get().customFonts, f] }),
-      ai: { provider: 'gemini', geminiKey: '', openaiKey: '', freeMode: true },
+      ai: { provider: 'openai', geminiKey: '', openaiKey: '', claudeKey: '', freeMode: true },
       setAi: (patch) => set({ ai: { ...get().ai, ...patch } }),
     }),
     {

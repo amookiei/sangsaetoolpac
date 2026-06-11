@@ -1,4 +1,5 @@
-import type { Project, Section } from '../state/types';
+import type { AiConfig, Project, Section } from '../state/types';
+import { callCopyLLM, parseJsonLoose } from './copyLLM';
 
 export const CONTENT_LANGS = [
   { code: 'ko', label: '한국어' },
@@ -9,13 +10,13 @@ export const CONTENT_LANGS = [
 export type ContentLang = (typeof CONTENT_LANGS)[number]['code'];
 
 /**
- * 상세페이지 본문(섹션 텍스트) AI 번역 — Gemini 텍스트 모델 사용 (AI Studio 무료 키).
+ * 상세페이지 본문(섹션 텍스트) AI 번역 — copyLLM 라우터 사용 (Claude 우선 → Gemini 폴백).
  * 커머스 카피 톤을 유지하도록 지시하고, 줄 단위 배열로 받아 원래 블록에 매핑한다.
  */
 export async function translateSections(
   project: Project,
   target: ContentLang,
-  geminiKey: string,
+  ai: AiConfig,
 ): Promise<Section[]> {
   const texts: string[] = [];
   const slots: { sIdx: number; bIdx: number }[] = [];
@@ -38,27 +39,8 @@ export async function translateSections(
     JSON.stringify(texts),
   ].join('\n');
 
-  const res = await fetch(
-    'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json' },
-      }),
-    },
-  );
-  if (!res.ok) throw new Error(`번역 API 오류 (${res.status}): ${(await res.text()).slice(0, 160)}`);
-  const json = await res.json();
-  const raw = json.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!raw) throw new Error('번역 응답이 비어 있습니다.');
-  let translated: string[];
-  try {
-    translated = JSON.parse(raw);
-  } catch {
-    throw new Error('번역 응답 파싱 실패 — 다시 시도해 주세요.');
-  }
+  const raw = await callCopyLLM(prompt, ai);
+  const translated = parseJsonLoose<string[]>(raw);
   if (!Array.isArray(translated) || translated.length !== texts.length) {
     throw new Error('번역 결과 개수가 원문과 다릅니다 — 다시 시도해 주세요.');
   }
