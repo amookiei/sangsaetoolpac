@@ -1,5 +1,6 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { animById, LINE_DELAY } from '../../data/typoAnimations';
+import { useCycle } from './useCycle';
 
 const EASE = 'cubic-bezier(.2,.7,.3,1)';
 
@@ -7,6 +8,8 @@ const EASE = 'cubic-bezier(.2,.7,.3,1)';
  * 타이포 애니메이션 미리보기 — GIF처럼 주기 반복 재생.
  * unit 'char': 글자별 stagger (charOffset으로 블록 맨 위부터 누적 순서 유지)
  * unit 'line': 줄 전체가 lineIdx 순서대로 등장
+ * cycle: 블록 단위로 공유하는 재시작 키 (모든 줄이 함께 다시 재생)
+ * freeze: 드래그 선택 중 리마운트로 선택이 끊기지 않도록 사이클 정지
  */
 export function TypoText({
   text,
@@ -16,6 +19,8 @@ export function TypoText({
   speed = 1,
   charOffset = 0,
   lineIdx = 0,
+  cycle: externalCycle,
+  freeze = false,
 }: {
   text: string;
   animId: string | null;
@@ -24,6 +29,8 @@ export function TypoText({
   speed?: number;
   charOffset?: number;
   lineIdx?: number;
+  cycle?: number;
+  freeze?: boolean;
 }) {
   const anim = animById(animId);
   const dur = anim ? Math.max(anim.duration, 0.3) / speed : 0;
@@ -33,7 +40,10 @@ export function TypoText({
         ? (lineIdx * LINE_DELAY) / speed + dur
         : (charOffset + text.length) * stagger + dur) * 1000 + 1400
     : 0;
-  const cycle = useCycle(anim ? Math.max(totalMs, 2600) : 0);
+  const internalCycle = useCycle(
+    anim && externalCycle === undefined && !freeze ? Math.max(totalMs, 2600) : 0,
+  );
+  const cycle = externalCycle ?? internalCycle;
 
   // data-ls/data-ci: 작업창 글자 드래그 선택 시 원본 텍스트 인덱스 매핑용
   if (!anim) return <span style={style} data-ls={charOffset}>{text}</span>;
@@ -96,15 +106,4 @@ export function AnimBox({
       {children}
     </div>
   );
-}
-
-/** periodMs 간격으로 키를 바꿔 애니메이션을 재시작 (0이면 비활성) */
-function useCycle(periodMs: number): number {
-  const [cycle, setCycle] = useState(0);
-  useEffect(() => {
-    if (!periodMs) return;
-    const t = setInterval(() => setCycle((c) => c + 1), periodMs);
-    return () => clearInterval(t);
-  }, [periodMs]);
-  return cycle;
 }

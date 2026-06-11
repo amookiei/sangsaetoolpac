@@ -271,6 +271,8 @@ export function layoutSection(section: Section, width: number): SectionLayout {
         for (const { text: line, startIdx } of wrapIndexed(b, maxW, c)) {
           if (!line) {
             y += lineH * 0.6;
+            lineIdx += 1;
+            charOffset += 1; // 개행 — 미리보기 인덱스와 동기화
             continue;
           }
           const segs = segmentLine(b, line, startIdx);
@@ -309,6 +311,7 @@ export function layoutSection(section: Section, width: number): SectionLayout {
             charOffset += [...s.text].length;
             sx += widths[si];
           });
+          charOffset += 1; // 개행
           lineIdx += 1;
           y += lineH;
         }
@@ -324,6 +327,8 @@ export function layoutSection(section: Section, width: number): SectionLayout {
       for (const line of lines) {
         if (!line) {
           y += lineH * 0.6;
+          lineIdx += 1;
+          charOffset += 1; // 개행 — 미리보기 인덱스와 동기화
           continue;
         }
         const tw = c.measureText(line).width;
@@ -363,7 +368,7 @@ export function layoutSection(section: Section, width: number): SectionLayout {
           animMeta: meta(),
           charXs,
         });
-        charOffset += [...line].length;
+        charOffset += [...line].length + 1; // +1 개행
         lineIdx += 1;
         y += lineH;
       }

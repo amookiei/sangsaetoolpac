@@ -37,6 +37,7 @@ export function Step5Editor({ project }: { project: Project }) {
   const [overIdx, setOverIdx] = useState<number | null>(null);
   const imgInput = useRef<HTMLInputElement>(null);
   const fontInput = useRef<HTMLInputElement>(null);
+  const contentTaRef = useRef<HTMLTextAreaElement>(null);
 
   const width = PLATFORM_WIDTH[project.platform];
   const guide = guideOf(project);
@@ -265,7 +266,9 @@ export function Step5Editor({ project }: { project: Project }) {
         </aside>
 
         <div className="ed-canvas-wrap" onClick={() => setSelBlock(null)}>
-          <div className="ed-canvas" style={{ width: width * scale }}>
+          <div>
+            <div className="panel-caption">프리뷰창 — 글자를 드래그하면 작업창에 선택이 표시됩니다</div>
+            <div className="ed-canvas" style={{ width: width * scale }}>
             <div style={{ zoom: scale }}>
               <SectionPreview
                 section={sec}
@@ -287,13 +290,23 @@ export function Step5Editor({ project }: { project: Project }) {
                 onTextSelect={(blockId, start, end) => {
                   setSelBlock(blockId);
                   setSelRange({ start, end });
+                  // 프리뷰창 드래그 범위를 우측 작업창 텍스트에도 선택 표시
+                  requestAnimationFrame(() => {
+                    const ta = contentTaRef.current;
+                    if (ta) {
+                      ta.focus({ preventScroll: true });
+                      ta.setSelectionRange(start, end);
+                    }
+                  });
                 }}
               />
             </div>
           </div>
+          </div>
         </div>
 
         <aside className="ed-inspector card" style={{ padding: 18 }}>
+          <div className="panel-caption" style={{ marginTop: 0 }}>작업창</div>
           <strong style={{ fontSize: 14 }}>섹션: {sec.name}</strong>
           <label className="label">섹션 배경</label>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -395,6 +408,7 @@ export function Step5Editor({ project }: { project: Project }) {
               <strong style={{ fontSize: 13 }}>텍스트 블록</strong>
               <label className="label">내용</label>
               <textarea
+                ref={contentTaRef}
                 className="input"
                 value={block.text}
                 onChange={(e) =>
