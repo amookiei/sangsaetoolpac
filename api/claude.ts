@@ -5,8 +5,7 @@
  */
 import Anthropic from '@anthropic-ai/sdk';
 
-export const config = { runtime: 'edge' };
-
+// Node.js 런타임 (Web 핸들러 시그니처) — Edge 번들러는 SDK의 node 내장 모듈을 처리하지 못함
 export default async function handler(req: Request): Promise<Response> {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'POST만 지원합니다.' }), { status: 405 });
