@@ -4,6 +4,7 @@ import { TypoText, AnimBox } from './TypoText';
 import { useCycle } from './useCycle';
 import { segmentLine } from '../../utils/richText';
 import { animById, effectiveUnit, LINE_DELAY } from '../../data/typoAnimations';
+import { effLine } from '../../data/lineStyle';
 
 /**
  * 섹션 라이브 미리보기 = 프리뷰창 (애니메이션 실시간 재생 + 글자 드래그 선택).
@@ -382,23 +383,48 @@ function BlockView({ b, selected, hovered }: { b: Block; selected: boolean; hove
     );
   }
 
-  // 일반 텍스트 — 글자별 단위는 블록 맨 위부터 누적 순서 (빈 줄도 높이 유지)
-  const lineStyle: React.CSSProperties = {
-    fontFamily: `"${b.font}", "Noto Sans KR", sans-serif`,
-    fontSize: b.fontSize,
-    fontWeight: weight,
-    color: b.color,
-    background: b.highlight ?? undefined,
-    padding: b.highlight ? `0 ${hlPad}px` : undefined,
-    borderRadius: b.highlight ? hlRadius : undefined,
-    boxDecorationBreak: 'clone',
-  };
+  // 일반 텍스트 — 줄(개행)마다 스타일/숫자 역할 적용, 글자별 단위는 위에서부터 누적
   return (
     <div style={{ textAlign: b.align, lineHeight: 1.55 }}>
-      {lines.map(({ line, startIdx }, i) =>
-        line === '' ? (
-          <div key={i} style={{ height: emptyLineH }} />
-        ) : (
+      {lines.map(({ line, startIdx }, i) => {
+        if (line === '') return <div key={i} style={{ height: emptyLineH }} />;
+        const eff = effLine(b, i);
+
+        // 숫자 역할 줄 — 도형 뱃지
+        if (eff.numberShape && line.trim()) {
+          const fs = eff.size;
+          const sc = eff.numberShapeColor;
+          const base: React.CSSProperties = {
+            fontFamily: `"${eff.font}", "Noto Sans KR", sans-serif`, fontSize: fs,
+            fontWeight: eff.bold ? 800 : 400, color: eff.color,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          };
+          let badge: React.ReactNode;
+          if (eff.numberShape === 'circle') {
+            const d = Math.max(fs * 2.1, fs + line.length * fs * 0.62);
+            badge = <span style={{ ...base, width: d, height: d, borderRadius: '50%', background: sc }}>{line}</span>;
+          } else if (eff.numberShape === 'square') {
+            badge = <span style={{ ...base, padding: `${fs * 0.35}px ${fs * 0.55}px`, borderRadius: 10, background: sc }}>{line}</span>;
+          } else if (eff.numberShape === 'triangle') {
+            const w = Math.max(fs * 2.8, fs + line.length * fs * 0.8);
+            badge = <span style={{ ...base, width: w, height: w * 0.88, background: sc, clipPath: 'polygon(50% 0, 0 100%, 100% 100%)', alignItems: 'flex-end', paddingBottom: fs * 0.3 }}>{line}</span>;
+          } else {
+            badge = <span style={{ ...base, borderBottom: `5px solid ${sc}`, paddingBottom: 4 }}>{line}</span>;
+          }
+          return <div key={i} style={{ marginBottom: 8 }}>{badge}</div>;
+        }
+
+        const lineStyle: React.CSSProperties = {
+          fontFamily: `"${eff.font}", "Noto Sans KR", sans-serif`,
+          fontSize: eff.size,
+          fontWeight: eff.bold ? 800 : 400,
+          color: eff.color,
+          background: b.highlight ?? undefined,
+          padding: b.highlight ? `0 ${hlPad}px` : undefined,
+          borderRadius: b.highlight ? hlRadius : undefined,
+          boxDecorationBreak: 'clone',
+        };
+        return (
           <div key={i}>
             {animActive ? (
               <TypoText
@@ -415,8 +441,8 @@ function BlockView({ b, selected, hovered }: { b: Block; selected: boolean; hove
               <span data-ls={startIdx} style={lineStyle}>{line}</span>
             )}
           </div>
-        ),
-      )}
+        );
+      })}
     </div>
   );
 }

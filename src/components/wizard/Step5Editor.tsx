@@ -7,6 +7,7 @@ import { TEMPLATE_GROUPS, TEXT_TEMPLATES, instantiate } from '../../data/textTem
 import { readFileAsDataUrl, imageSize } from '../../utils/files';
 import { addRun, clearRuns, clampRuns, isRangeBold } from '../../utils/richText';
 import { bodyStyleOf } from '../../data/styleGuide';
+import { presetLineStyle, autoNumberLineStyles } from '../../data/lineStyle';
 import { translateSectionFree, type TransLang } from '../../utils/freeTranslate';
 import { resolveSection, untranslatedCount, VIEW_LANGS } from '../../data/viewLang';
 import { useT } from '../../i18n';
@@ -688,7 +689,11 @@ export function Step5Editor({ project }: { project: Project }) {
                     className="input"
                     value={block.text}
                     onChange={(e) =>
-                      patchBlock({ text: e.target.value, runs: clampRuns(block.runs, e.target.value.length) })
+                      patchBlock({
+                        text: e.target.value,
+                        runs: clampRuns(block.runs, e.target.value.length),
+                        lineStyles: autoNumberLineStyles(e.target.value, block.lineStyles, guide),
+                      })
                     }
                     onSelect={(e) => {
                       const el = e.currentTarget;
@@ -787,6 +792,59 @@ export function Step5Editor({ project }: { project: Project }) {
               >
                 ✨ 강조 스타일 적용
               </button>
+
+              {block.text.split('\n').length > 1 && (
+                <>
+                  <label className="label">줄별 스타일 (같은 블록 안에서 줄마다 다르게)</label>
+                  {block.text.split('\n').map((ln, li) => {
+                    const ls = block.lineStyles?.[li] ?? null;
+                    const role = ls?.role ?? '기본';
+                    const setLine = (next: typeof ls) => {
+                      const arr = [...(block.lineStyles ?? [])];
+                      while (arr.length < block.text.split('\n').length) arr.push(null);
+                      arr[li] = next;
+                      patchBlock({ lineStyles: arr.some(Boolean) ? arr : undefined });
+                    };
+                    return (
+                      <div key={li} className="run-row" style={{ alignItems: 'center' }}>
+                        <span className="hint" style={{ width: 78, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {ln.trim() || '(빈 줄)'}
+                        </span>
+                        <select
+                          className="input"
+                          style={{ flex: 1, padding: '5px 8px', fontSize: 12.5 }}
+                          value={role}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v === '기본') return setLine(null);
+                            if (v === 'heading') return setLine(presetLineStyle('heading', guide));
+                            if (v === 'number') return setLine(presetLineStyle('number', guide));
+                            return setLine(presetLineStyle('body', guide, v));
+                          }}
+                        >
+                          <option value="기본">기본</option>
+                          <option value="heading">제목</option>
+                          {guide.bodyStyles.map((s) => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                          <option value="number">숫자</option>
+                        </select>
+                        {ls && (
+                          <input
+                            type="color"
+                            title="줄 색상"
+                            value={ls.color ?? '#222222'}
+                            onChange={(e) => setLine({ ...ls, color: e.target.value })}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                  <p className="hint" style={{ marginTop: 4 }}>
+                    숫자 1글자만 입력된 줄은 자동으로 ‘숫자’로 잡힙니다.
+                  </p>
+                </>
+              )}
               </>
               )}
               <label className="label">블록 특성 (스타일 정립과 연동)</label>

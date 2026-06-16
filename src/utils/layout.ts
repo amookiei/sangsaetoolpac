@@ -1,6 +1,7 @@
 import type { Block, NumberShape, Section } from '../state/types';
 import { segmentLine, styleAt } from './richText';
 import { effectiveUnit } from '../data/typoAnimations';
+import { effLine } from '../data/lineStyle';
 
 /**
  * 섹션 → 그리기 프리미티브 목록.
@@ -320,58 +321,95 @@ export function layoutSection(section: Section, width: number): SectionLayout {
         continue;
       }
 
-      const weight = blockWeight(b);
-      const lines = wrapText(b.text, b.font, b.fontSize, weight, maxW);
-      const lineH = Math.round(b.fontSize * 1.55);
-      setFont(c, b.font, b.fontSize, weight);
-      for (const line of lines) {
-        if (!line) {
+      // 소스 줄(개행) 단위로 처리 — 줄마다 다른 스타일/숫자 역할 적용
+      const srcLines = b.text.split('\n');
+      srcLines.forEach((srcLine, si) => {
+        const eff = effLine(b, si);
+        const weight = eff.bold ? 800 : 400;
+
+        // 숫자 역할 줄 — 도형(동그라미/세모/네모/밑줄) 위에 텍스트
+        if (eff.numberShape && srcLine.trim()) {
+          const fs = eff.size;
+          const text = srcLine;
+          setFont(c, eff.font, fs, weight);
+          const tw = c.measureText(text).width;
+          let sw: number;
+          let sh: number;
+          if (eff.numberShape === 'circle') {
+            sw = sh = Math.max(tw + fs * 0.9, fs * 2.1);
+          } else if (eff.numberShape === 'square') {
+            sw = tw + fs * 1.1;
+            sh = fs * 1.9;
+          } else if (eff.numberShape === 'triangle') {
+            sw = Math.max(tw + fs * 1.8, fs * 2.8);
+            sh = sw * 0.88;
+          } else {
+            sw = tw + 8;
+            sh = fs * 1.55 + 8;
+          }
+          const sx = b.align === 'left' ? PAD_X : b.align === 'right' ? width - PAD_X - sw : (width - sw) / 2;
+          if (eff.numberShape === 'underline') {
+            prims.push({ type: 'shape', shape: 'underline', x: sx, y: y + fs * 1.45, w: sw, h: 5, color: eff.numberShapeColor });
+          } else {
+            prims.push({ type: 'shape', shape: eff.numberShape, x: sx, y, w: sw, h: sh, color: eff.numberShapeColor });
+          }
+          const tx = sx + (sw - tw) / 2;
+          const baseline =
+            eff.numberShape === 'triangle' ? y + sh * 0.78 : eff.numberShape === 'underline' ? y + fs * 1.1 : y + sh / 2 + fs * 0.35;
+          prims.push({
+            type: 'line', text, x: tx, baseline, font: eff.font, size: fs, weight,
+            color: eff.color, anim: b.animation, animMeta: meta(), charXs: null,
+          });
+          y += sh + 8;
+          charOffset += [...srcLine].length + 1;
+          lineIdx += 1;
+          return;
+        }
+
+        const lineH = Math.round(eff.size * 1.55);
+        if (!srcLine) {
           y += lineH * 0.6;
           lineIdx += 1;
-          charOffset += 1; // 개행 — 미리보기 인덱스와 동기화
-          continue;
+          charOffset += 1; // 개행
+          return;
         }
-        const tw = c.measureText(line).width;
-        const x = b.align === 'left' ? PAD_X : b.align === 'right' ? width - PAD_X - tw : (width - tw) / 2;
-        const baseline = y + b.fontSize;
-        if (b.highlight) {
-          const pad = b.hlPad ?? 8;
-          prims.push({
-            type: 'rect',
-            x: x - pad,
-            y: y + b.fontSize * 0.08,
-            w: tw + pad * 2,
-            h: b.fontSize * 1.3,
-            color: b.highlight,
-            rx: b.hlRadius ?? 4,
-          });
-        }
-        let charXs: number[] | null = null;
-        if (b.animation) {
-          charXs = [];
-          let cx = x;
-          for (const ch of line) {
-            charXs.push(cx);
-            cx += c.measureText(ch).width;
+        // 한 소스 줄이 가로폭을 넘으면 시각적으로 여러 줄로 wrap
+        const wrapped = wrapText(srcLine, eff.font, eff.size, weight, maxW);
+        setFont(c, eff.font, eff.size, weight);
+        wrapped.forEach((line) => {
+          if (!line) {
+            y += lineH * 0.6;
+            return;
           }
-        }
-        prims.push({
-          type: 'line',
-          text: line,
-          x,
-          baseline,
-          font: b.font,
-          size: b.fontSize,
-          weight,
-          color: b.color,
-          anim: b.animation,
-          animMeta: meta(),
-          charXs,
+          const tw = c.measureText(line).width;
+          const x = b.align === 'left' ? PAD_X : b.align === 'right' ? width - PAD_X - tw : (width - tw) / 2;
+          const baseline = y + eff.size;
+          if (b.highlight) {
+            const pad = b.hlPad ?? 8;
+            prims.push({
+              type: 'rect', x: x - pad, y: y + eff.size * 0.08,
+              w: tw + pad * 2, h: eff.size * 1.3, color: b.highlight, rx: b.hlRadius ?? 4,
+            });
+          }
+          let charXs: number[] | null = null;
+          if (b.animation) {
+            charXs = [];
+            let cx = x;
+            for (const ch of line) {
+              charXs.push(cx);
+              cx += c.measureText(ch).width;
+            }
+          }
+          prims.push({
+            type: 'line', text: line, x, baseline,
+            font: eff.font, size: eff.size, weight, color: eff.color,
+            anim: b.animation, animMeta: meta(), charXs,
+          });
+          y += lineH;
         });
-        charOffset += [...line].length + 1; // +1 개행
+        charOffset += [...srcLine].length + 1; // +1 개행
         lineIdx += 1;
-        y += lineH;
-      }
+      });
       applyMinHeight();
       y += GAP;
     }
