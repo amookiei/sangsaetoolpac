@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
+import { useStore } from '../../state/store';
 import { renderSvg } from '../../utils/renderSvg';
 import { renderPng, renderPngCombined } from '../../utils/renderPng';
 import { renderGif } from '../../utils/renderGif';
 import { layoutSection } from '../../utils/layout';
 import { downloadBlob, fmtBytes, MAX_SECTION_BYTES, safeFilename } from '../../utils/files';
+import { resolveSection, VIEW_LANGS } from '../../data/viewLang';
 import { useT } from '../../i18n';
 import type { Project, Section } from '../../state/types';
 
@@ -23,6 +25,7 @@ type DlPlatformId = (typeof DL_PLATFORMS)[number]['id'];
 /** 7단계: 다운로드 — 파일 형식 / 등록 플랫폼 / 페이지 선택 / 해상도 / 한 장 내보내기 */
 export function Step7Export({ project }: { project: Project }) {
   const t = useT();
+  const { viewLang, setViewLang } = useStore();
   const [format, setFormat] = useState<Format>('png');
   const [platformId, setPlatformId] = useState<DlPlatformId>(
     project.platform === 'wadiz' ? 'wadiz' : 'naver',
@@ -41,15 +44,18 @@ export function Step7Export({ project }: { project: Project }) {
   const selSections = project.sections.filter((s) => selected.has(s.id));
   const allSelected = selected.size === project.sections.length && project.sections.length > 0;
 
+  const resolve = (s: Section) => resolveSection(s, viewLang);
+
   // 다운로드 정보: 총 페이지 수와 픽셀 크기
   const totalDims = useMemo(() => {
     try {
-      const h = selSections.reduce((a, s) => a + Math.ceil(layoutSection(s, width).height), 0);
+      const h = selSections.reduce((a, s) => a + Math.ceil(layoutSection(resolve(s), width).height), 0);
       return { w: Math.round(width * (format === 'png' ? scale : 1)), h: Math.round(h * (format === 'png' ? scale : 1)) };
     } catch {
       return { w: width, h: 0 };
     }
-  }, [selSections, width, scale, format]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selSections, width, scale, format, viewLang]);
 
   const toggleAll = () =>
     setSelected(allSelected ? new Set() : new Set(project.sections.map((s) => s.id)));
@@ -60,8 +66,9 @@ export function Step7Export({ project }: { project: Project }) {
     setSelected(next);
   };
 
+  const langSuffix = viewLang === 'ko' ? '' : `_${viewLang}`;
   const fname = (idx: number, sec: Section, ext: string) =>
-    `${String(idx + 1).padStart(2, '0')}_${safeFilename(sec.name)}_${platform.id}.${ext}`;
+    `${String(idx + 1).padStart(2, '0')}_${safeFilename(sec.name)}_${platform.id}${langSuffix}.${ext}`;
 
   const noteSize = (id: string, n: number) => setSizes((s) => ({ ...s, [id]: n }));
 
@@ -72,28 +79,29 @@ export function Step7Export({ project }: { project: Project }) {
     try {
       if (format === 'png' && singleImage) {
         setStatus('한 장 이미지 합성 중…');
-        const blob = await renderPngCombined(selSections, width, scale);
+        const blob = await renderPngCombined(selSections.map(resolve), width, scale);
         noteSize('combined', blob.size);
-        downloadBlob(blob, `${safeFilename(project.name)}_${platform.id}_전체.png`);
+        downloadBlob(blob, `${safeFilename(project.name)}_${platform.id}${langSuffix}_전체.png`);
         setStatus(blob.size > MAX_SECTION_BYTES ? `⚠ ${fmtBytes(blob.size)} — 10MB 초과` : `완료 · ${fmtBytes(blob.size)}`);
         return;
       }
       for (let i = 0; i < project.sections.length; i++) {
         const sec = project.sections[i];
         if (!selected.has(sec.id)) continue;
+        const rsec = resolve(sec);
         if (format === 'svg') {
-          const svg = renderSvg(sec, width, true);
+          const svg = renderSvg(rsec, width, true);
           const blob = new Blob([svg], { type: 'image/svg+xml' });
           noteSize(sec.id, blob.size);
           downloadBlob(blob, fname(i, sec, 'svg'));
         } else if (format === 'png') {
           setStatus(`PNG 생성 중 (${sec.name})…`);
-          const blob = await renderPng(sec, width, scale);
+          const blob = await renderPng(rsec, width, scale);
           noteSize(sec.id, blob.size);
           downloadBlob(blob, fname(i, sec, 'png'));
         } else {
           if (!hasAnim(sec)) continue;
-          const blob = await renderGif(sec, width, {
+          const blob = await renderGif(rsec, width, {
             fps: 15,
             onProgress: (r) => setStatus(`GIF 인코딩 (${sec.name}) ${Math.round(r * 100)}%`),
           });
@@ -122,7 +130,25 @@ export function Step7Export({ project }: { project: Project }) {
 
       <div className="dl-layout">
         <div className="card dl-panel">
-          <label className="label" style={{ marginTop: 0 }}>{t('파일 형식')}</label>
+          <label className="label" style={{ marginTop: 0 }}>언어</label>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {VIEW_LANGS.map((l) => (
+              <button
+                key={l.code}
+                className={`chip selectable ${viewLang === l.code ? 'on' : ''}`}
+                onClick={() => setViewLang(l.code)}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+          <p className="hint" style={{ marginTop: 4 }}>
+            {viewLang === 'ko'
+              ? '원문(한국어)으로 추출'
+              : `${viewLang.toUpperCase()} 번역본으로 추출 — 5단계에서 번역해 두면 그 언어로 나옵니다`}
+          </p>
+
+          <label className="label">{t('파일 형식')}</label>
           <select
             className="input"
             value={format}

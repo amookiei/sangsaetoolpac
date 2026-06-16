@@ -3,7 +3,10 @@ import { useStore } from '../../state/store';
 import { buildSections, generateSections } from '../../data/draftGenerator';
 import { generateAiSections } from '../../utils/aiCopy';
 import { splitDraft } from '../../utils/splitDraft';
+import { guideOf } from '../../data/styleGuide';
 import type { Block, Project } from '../../state/types';
+
+type DraftRole = 'heading' | 'body' | 'number';
 
 /** 4단계: 상세 기획안 — 외부 기획안 붙여넣기 → 문단별 쪼개기(0원)가 기본, AI/템플릿은 옵션 */
 export function Step4Draft({ project }: { project: Project }) {
@@ -53,6 +56,29 @@ export function Step4Draft({ project }: { project: Project }) {
     updateSection(project.id, sid, {
       blocks: sec.blocks.map((b) => (b.id === bid ? { ...b, ...patch } : b)),
     });
+  };
+
+  const guide = guideOf(project);
+  const roleOf = (b: Block): DraftRole =>
+    b.numberShape ? 'number' : b.kind === 'heading' || b.styleId === 'heading' ? 'heading' : 'body';
+  const setRole = (sid: string, bid: string, role: DraftRole) => {
+    if (role === 'heading') {
+      patchBlock(sid, bid, {
+        kind: 'heading', styleId: 'heading', numberShape: null,
+        font: guide.headingFont, fontSize: guide.headingSize, color: guide.headingColor, bold: guide.headingBold,
+      });
+    } else if (role === 'number') {
+      patchBlock(sid, bid, {
+        kind: 'heading', numberShape: guide.numberShape, numberShapeColor: guide.numberShapeColor,
+        fontSize: guide.numberSize, color: guide.numberColor, bold: true,
+      });
+    } else {
+      const bs = guide.bodyStyles[0];
+      patchBlock(sid, bid, {
+        kind: 'body', styleId: bs.id, numberShape: null,
+        font: bs.font, fontSize: bs.size, color: bs.color, bold: false,
+      });
+    }
   };
 
   return (
@@ -127,18 +153,30 @@ export function Step4Draft({ project }: { project: Project }) {
                 onChange={(e) => patchBlock(sec.id, b.id, { imageDesc: e.target.value })}
               />
             ) : (
-              <textarea
-                key={b.id}
-                className="input"
-                style={{
-                  marginTop: 8,
-                  fontWeight: b.kind === 'heading' ? 800 : 400,
-                  fontSize: b.kind === 'heading' ? 17 : 14,
-                  minHeight: b.kind === 'heading' ? 48 : 64,
-                }}
-                value={b.text}
-                onChange={(e) => patchBlock(sec.id, b.id, { text: e.target.value })}
-              />
+              <div key={b.id} style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'flex-start' }}>
+                <select
+                  className="input"
+                  style={{ width: 76, padding: '6px 6px', fontSize: 12.5, flexShrink: 0 }}
+                  value={roleOf(b)}
+                  onChange={(e) => setRole(sec.id, b.id, e.target.value as DraftRole)}
+                  title="제목 / 본문 / 숫자 미리 나누기"
+                >
+                  <option value="heading">제목</option>
+                  <option value="body">본문</option>
+                  <option value="number">숫자</option>
+                </select>
+                <textarea
+                  className="input"
+                  style={{
+                    flex: 1,
+                    fontWeight: roleOf(b) === 'heading' ? 800 : 400,
+                    fontSize: roleOf(b) === 'heading' ? 17 : 14,
+                    minHeight: roleOf(b) === 'number' ? 40 : roleOf(b) === 'heading' ? 48 : 64,
+                  }}
+                  value={b.text}
+                  onChange={(e) => patchBlock(sec.id, b.id, { text: e.target.value })}
+                />
+              </div>
             ),
           )}
         </div>

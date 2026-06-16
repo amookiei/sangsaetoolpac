@@ -60,6 +60,21 @@ export interface Block {
   cardBg?: string | null; // 블록 전체 카드 배경 (리뷰 카드·쿠폰 등 템플릿용)
   runs?: StyleRun[]; // 글자 단위 부분 스타일
   heightPx?: number | null; // 블록 최소 높이 — 상단 고정, 하단으로 늘어남
+  /** 비파괴 다국어 — 원문(text)은 한국어 유지, 언어별 번역본을 따로 저장 */
+  translations?: { en?: string; ja?: string; zh?: string };
+  /** 같은 블록 안에서도 줄(개행 단위)마다 스타일/역할을 다르게 — 소스 줄 인덱스 기준 */
+  lineStyles?: (LineStyle | null)[];
+}
+
+/** 줄별 스타일 — 값이 있으면 블록 기본값을 덮어씀 (구체값 저장, 렌더 엔진은 가이드 불필요) */
+export interface LineStyle {
+  role?: 'heading' | 'body' | 'number'; // UI 표시용 라벨
+  font?: string;
+  size?: number;
+  color?: string;
+  bold?: boolean;
+  numberShape?: NumberShape | null; // 지정 시 그 줄을 숫자 뱃지로 렌더
+  numberShapeColor?: string;
 }
 
 /** 섹션 배경 그라디언트 (bg → color2, CSS 각도) */
