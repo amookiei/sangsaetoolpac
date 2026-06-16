@@ -7,7 +7,8 @@ import { TEMPLATE_GROUPS, TEXT_TEMPLATES, instantiate } from '../../data/textTem
 import { readFileAsDataUrl, imageSize } from '../../utils/files';
 import { addRun, clearRuns, clampRuns, isRangeBold } from '../../utils/richText';
 import { bodyStyleOf } from '../../data/styleGuide';
-import { translateSections, CONTENT_LANGS, type ContentLang } from '../../utils/translate';
+import { translateSectionFree, type TransLang } from '../../utils/freeTranslate';
+import { resolveSection, untranslatedCount, VIEW_LANGS } from '../../data/viewLang';
 import { useT } from '../../i18n';
 import { CLIP_ANIMS, effectiveUnit } from '../../data/typoAnimations';
 import { SectionPreview } from '../editor/SectionPreview';
@@ -22,7 +23,7 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 
 /** 5단계: Canva 스타일 디자인 에디터 — 스타일 정립·텍스트 템플릿·폰트·모션 편집 */
 export function Step5Editor({ project }: { project: Project }) {
-  const { updateProject, updateSection, customFonts, addCustomFont, ai } = useStore();
+  const { updateProject, updateSection, customFonts, addCustomFont, viewLang, setViewLang } = useStore();
   const t = useT();
   const [secIdx, setSecIdx] = useState(0);
   const [selBlock, setSelBlock] = useState<string | null>(null);
@@ -33,8 +34,7 @@ export function Step5Editor({ project }: { project: Project }) {
   const [selRange, setSelRange] = useState<{ start: number; end: number } | null>(null);
   const [runColor, setRunColor] = useState('#d97757');
   const [runHl, setRunHl] = useState('#fff176');
-  const [transLang, setTransLang] = useState<ContentLang>('en');
-  const [transBusy, setTransBusy] = useState(false);
+  const [transBusy, setTransBusy] = useState('');
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
   const imgInput = useRef<HTMLInputElement>(null);
@@ -187,7 +187,30 @@ export function Step5Editor({ project }: { project: Project }) {
     setSelBlock(blocks[blocks.length - 1].id);
   };
 
+  /** 무료 번역 — 선택 섹션들을 현재 보기 언어로 번역해 translations에 저장 (비파괴) */
+  const translatePages = async (targetSections: typeof project.sections, lang: TransLang) => {
+    const ids = new Set(targetSections.map((s) => s.id));
+    let updated = project.sections;
+    const total = targetSections.length;
+    let i = 0;
+    for (const s of project.sections) {
+      if (!ids.has(s.id)) continue;
+      i += 1;
+      setTransBusy(`번역 중… (${i}/${total})`);
+      try {
+        const translated = await translateSectionFree(s, lang);
+        updated = updated.map((x) => (x.id === s.id ? translated : x));
+        updateProject(project.id, { sections: updated });
+      } catch {
+        /* 섹션 실패 시 다음으로 */
+      }
+    }
+    setTransBusy('');
+  };
+
   const scale = Math.min(1, 620 / width);
+  const previewSection = resolveSection(sec, viewLang);
+  const untranslated = untranslatedCount(sec, viewLang);
 
   return (
     <>
@@ -196,36 +219,42 @@ export function Step5Editor({ project }: { project: Project }) {
         <button className="btn ghost sm" onClick={() => setShowGuide(true)}>
           🎨 {t('디자인 스타일 정립')}
         </button>
-        <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-          <select
-            className="input"
-            style={{ width: 120, padding: '6px 8px', fontSize: 13 }}
-            value={transLang}
-            onChange={(e) => setTransLang(e.target.value as ContentLang)}
-          >
-            {CONTENT_LANGS.map((l) => (
-              <option key={l.code} value={l.code}>{l.label}</option>
-            ))}
-          </select>
-          <button
-            className="btn subtle sm"
-            disabled={transBusy}
-            onClick={async () => {
-              setTransBusy(true);
-              try {
-                const sections = await translateSections(project, transLang, ai);
-                updateProject(project.id, { sections });
-              } catch (e) {
-                alert(e instanceof Error ? e.message : '번역 실패');
-              } finally {
-                setTransBusy(false);
-              }
-            }}
-          >
-            {transBusy ? '번역 중…' : `🌐 ${t('본문 번역')}`}
-          </button>
+        <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+          <span className="hint" style={{ marginRight: 2 }}>🌐 보기</span>
+          {VIEW_LANGS.map((l) => (
+            <button
+              key={l.code}
+              className={`chip selectable ${viewLang === l.code ? 'on' : ''}`}
+              onClick={() => setViewLang(l.code)}
+            >
+              {l.label}
+            </button>
+          ))}
         </span>
-        <span className="hint">블록을 클릭해 세부 조정 (기준 폭 {width}px)</span>
+        {viewLang !== 'ko' && (
+          <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+            <button
+              className="btn subtle sm"
+              disabled={!!transBusy}
+              onClick={() => translatePages([sec], viewLang as TransLang)}
+            >
+              이 페이지 번역
+            </button>
+            <button
+              className="btn subtle sm"
+              disabled={!!transBusy}
+              onClick={() => translatePages(project.sections, viewLang as TransLang)}
+            >
+              전체 번역
+            </button>
+            {transBusy && <span className="hint">{transBusy}</span>}
+          </span>
+        )}
+        <span className="hint">
+          {viewLang === 'ko'
+            ? `블록을 클릭해 세부 조정 (기준 폭 ${width}px)`
+            : '무료 번역(0원) · 원문은 그대로, 추출 시 이 언어로 나옵니다'}
+        </span>
       </div>
 
       {showGuide && (
@@ -499,11 +528,15 @@ export function Step5Editor({ project }: { project: Project }) {
 
         <div className="ed-canvas-wrap" onClick={() => setSelBlock(null)}>
           <div>
-            <div className="panel-caption">프리뷰창 — 글자를 드래그하면 작업창에 선택이 표시됩니다</div>
+            <div className="panel-caption">
+              {viewLang === 'ko'
+                ? '프리뷰창 — 글자를 드래그하면 작업창에 선택이 표시됩니다'
+                : `프리뷰창 — ${viewLang.toUpperCase()} 번역 보기${untranslated > 0 ? ` (미번역 ${untranslated}개는 원문 표시)` : ''}`}
+            </div>
             <div className="ed-canvas" style={{ width: width * scale }}>
             <div style={{ zoom: scale }}>
               <SectionPreview
-                section={sec}
+                section={previewSection}
                 width={width}
                 selectedBlock={selBlock}
                 onSelectBlock={setSelBlock}
@@ -524,18 +557,22 @@ export function Step5Editor({ project }: { project: Project }) {
                   }
                   updateSection(project.id, sec.id, { blocks });
                 }}
-                onTextSelect={(blockId, start, end) => {
-                  setSelBlock(blockId);
-                  setSelRange({ start, end });
-                  // 프리뷰창 드래그 범위를 우측 작업창 텍스트에도 선택 표시
-                  requestAnimationFrame(() => {
-                    const ta = contentTaRef.current;
-                    if (ta) {
-                      ta.focus({ preventScroll: true });
-                      ta.setSelectionRange(start, end);
-                    }
-                  });
-                }}
+                onTextSelect={
+                  viewLang === 'ko'
+                    ? (blockId, start, end) => {
+                        setSelBlock(blockId);
+                        setSelRange({ start, end });
+                        // 프리뷰창 드래그 범위를 우측 작업창 텍스트에도 선택 표시
+                        requestAnimationFrame(() => {
+                          const ta = contentTaRef.current;
+                          if (ta) {
+                            ta.focus({ preventScroll: true });
+                            ta.setSelectionRange(start, end);
+                          }
+                        });
+                      }
+                    : undefined
+                }
               />
             </div>
           </div>
@@ -643,19 +680,38 @@ export function Step5Editor({ project }: { project: Project }) {
           {block && block.kind !== 'image' && (
             <>
               <strong style={{ fontSize: 13 }}>텍스트 블록</strong>
-              <label className="label">내용</label>
-              <textarea
-                ref={contentTaRef}
-                className="input"
-                value={block.text}
-                onChange={(e) =>
-                  patchBlock({ text: e.target.value, runs: clampRuns(block.runs, e.target.value.length) })
-                }
-                onSelect={(e) => {
-                  const el = e.currentTarget;
-                  setSelRange({ start: el.selectionStart, end: el.selectionEnd });
-                }}
-              />
+              {viewLang === 'ko' ? (
+                <>
+                  <label className="label">내용</label>
+                  <textarea
+                    ref={contentTaRef}
+                    className="input"
+                    value={block.text}
+                    onChange={(e) =>
+                      patchBlock({ text: e.target.value, runs: clampRuns(block.runs, e.target.value.length) })
+                    }
+                    onSelect={(e) => {
+                      const el = e.currentTarget;
+                      setSelRange({ start: el.selectionStart, end: el.selectionEnd });
+                    }}
+                  />
+                </>
+              ) : (
+                <>
+                  <label className="label">내용 ({viewLang.toUpperCase()} 번역 — 직접 수정 가능)</label>
+                  <textarea
+                    className="input"
+                    placeholder={block.text}
+                    value={block.translations?.[viewLang] ?? ''}
+                    onChange={(e) =>
+                      patchBlock({ translations: { ...block.translations, [viewLang]: e.target.value } })
+                    }
+                  />
+                  <p className="hint" style={{ marginTop: 4 }}>원문(한국어): {block.text}</p>
+                </>
+              )}
+              {viewLang === 'ko' && (
+              <>
               <label className="label">부분 스타일 — 작업창(캔버스)이나 위 입력창에서 글자를 드래그한 뒤 적용</label>
               {(() => {
                 const hasSel = !!selRange && selRange.start !== selRange.end;
@@ -731,6 +787,8 @@ export function Step5Editor({ project }: { project: Project }) {
               >
                 ✨ 강조 스타일 적용
               </button>
+              </>
+              )}
               <label className="label">블록 특성 (스타일 정립과 연동)</label>
               <select
                 className="input"

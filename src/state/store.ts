@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage } from './idbStorage';
 import { DEFAULT_FONT } from '../data/fonts';
 import { STRUCTURES } from '../data/structures';
+import type { ViewLang } from '../data/viewLang';
 import type {
   Account, AiConfig, Category, CustomFont, Platform, Project, RefAsset, Section,
 } from './types';
@@ -38,6 +39,10 @@ interface AppState {
   // UI 언어 (한/영/일/중)
   lang: Lang;
   setLang: (l: Lang) => void;
+
+  // 미리보기·추출 표시 언어 (상세페이지 콘텐츠 번역 토글)
+  viewLang: ViewLang;
+  setViewLang: (l: ViewLang) => void;
 
   // 계정 관리 (관리자가 생성, Gemini 키 사전 설정)
   accounts: Account[];
@@ -102,6 +107,9 @@ export const useStore = create<AppState>()(
 
       lang: 'ko',
       setLang: (lang) => set({ lang }),
+
+      viewLang: 'ko',
+      setViewLang: (viewLang) => set({ viewLang }),
 
       accounts: [],
       addAccount: (a) => set({ accounts: [...get().accounts, a] }),
