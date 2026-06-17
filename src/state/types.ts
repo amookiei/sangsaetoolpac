@@ -138,6 +138,41 @@ export interface BgLayer {
   hidden: boolean;
 }
 
+/** 채움(단색/그라데이션) — 오브젝트 fill·stroke, 향후 배경에 공용 사용 */
+export interface SolidPaint {
+  type: 'solid';
+  color: string;
+}
+export interface GradientPaint {
+  type: 'gradient';
+  angle: number; // 0=위→아래(CSS), 90=좌→우
+  stops: { color: string; pos: number }[]; // pos 0~1
+}
+export type Paint = SolidPaint | GradientPaint;
+
+export type ShapeKind = 'image' | 'rect' | 'ellipse';
+
+/** 피그마식 자유 배치 오브젝트 — 절대 좌표·변형 (이미지/도형) */
+export interface FloatObject {
+  id: string;
+  kind: ShapeKind;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rotation: number; // deg
+  opacity: number; // 0~1
+  fill: Paint | null; // 도형 채움 (이미지는 보통 null)
+  imageDataUrl?: string | null;
+  imgNatW?: number;
+  imgNatH?: number;
+  stroke?: { paint: Paint; width: number; position: 'inside' | 'center' | 'outside' } | null;
+  radius?: number; // 사각형 모서리 둥글기
+  shadow?: { x: number; y: number; blur: number; color: string } | null;
+  locked?: boolean;
+  hidden?: boolean;
+}
+
 export interface Section {
   id: string;
   name: string;
@@ -148,6 +183,7 @@ export interface Section {
   bgLayers?: BgLayer[]; // 레이어 2부터 — 배열 앞쪽이 콘텐츠에 가까움
   contentLocked?: boolean; // 레이어 1(블록 콘텐츠) 잠금
   contentOpacity?: number; // 레이어 1 불투명도 (0~1, 기본 1)
+  objects?: FloatObject[]; // 자유 배치 오브젝트(콘텐츠 위 오버레이)
 }
 
 export interface StructureItem {

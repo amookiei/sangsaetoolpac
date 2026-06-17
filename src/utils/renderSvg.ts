@@ -1,5 +1,6 @@
 import type { Section } from '../state/types';
 import { layoutSection, gradPoints } from './layout';
+import { objectsToSvg } from './renderObjects';
 import { TYPO_KEYFRAMES_CSS, LINE_DELAY, animById } from '../data/typoAnimations';
 
 const esc = (s: string) =>
@@ -120,13 +121,18 @@ export function renderSvg(section: Section, width: number, animated: boolean): s
   const content =
     contentOpacity < 1 ? [`<g opacity="${contentOpacity}">`, ...parts, `</g>`] : parts;
 
+  // 자유 배치 오브젝트 (콘텐츠 위)
+  const obj = objectsToSvg(lay.objects);
+
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${lay.width}" height="${H}" viewBox="0 0 ${lay.width} ${H}">`,
+    `<defs>${obj.defs}</defs>`,
     defs,
     style,
     `<rect width="${lay.width}" height="${H}" fill="${bgFill}"/>`,
     ...layerParts,
     ...content,
+    obj.body,
     `</svg>`,
   ].join('\n');
 }

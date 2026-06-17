@@ -1,5 +1,6 @@
 import type { Section } from '../state/types';
 import { layoutSection, setFont, gradPoints, type Prim, type SectionLayout } from './layout';
+import { drawObjectsCanvas } from './renderObjects';
 
 /**
  * 굵게 보강 텍스트 그리기 (PNG·GIF 공용).
@@ -152,6 +153,9 @@ export async function renderPngCanvas(
   } else {
     await drawPrims(c, lay);
   }
+
+  // 자유 배치 오브젝트 (콘텐츠 위)
+  await drawObjectsCanvas(c, lay.objects);
 
   return canvas;
 }

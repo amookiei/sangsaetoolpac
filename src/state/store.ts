@@ -70,6 +70,11 @@ interface AppState {
   addCustomFont: (f: CustomFont) => void;
   ai: AiConfig;
   setAi: (patch: Partial<AiConfig>) => void;
+
+  // 저장된 컬러 팔레트 (전 영역 컬러 위젯에서 공용)
+  palette: string[];
+  savePaletteColor: (color: string) => void;
+  removePaletteColor: (color: string) => void;
 }
 
 export const useStore = create<AppState>()(
@@ -166,6 +171,12 @@ export const useStore = create<AppState>()(
       addCustomFont: (f) => set({ customFonts: [...get().customFonts, f] }),
       ai: { provider: 'openai', geminiKey: '', openaiKey: '', claudeKey: '', freeMode: true },
       setAi: (patch) => set({ ai: { ...get().ai, ...patch } }),
+
+      palette: ['#d97757', '#1a1a2e', '#ffffff', '#fff176', '#ff5e51', '#3e7a4e'],
+      savePaletteColor: (color) =>
+        set({ palette: [color, ...get().palette.filter((c) => c !== color)].slice(0, 24) }),
+      removePaletteColor: (color) =>
+        set({ palette: get().palette.filter((c) => c !== color) }),
     }),
     {
       name: 'sangsae-studio-v1',
@@ -177,6 +188,7 @@ export const useStore = create<AppState>()(
         ai: s.ai,
         lang: s.lang,
         accounts: s.accounts,
+        palette: s.palette,
       }),
     },
   ),
