@@ -4,6 +4,7 @@ import { layoutSection, setFont, type Prim } from './layout';
 import { animById, LINE_DELAY } from '../data/typoAnimations';
 import { evalAnim } from './animEval';
 import { loadImage, imgCache, fillSectionBg, drawShape, fillTextBold, drawBgLayers } from './renderPng';
+import { drawObjectsCanvas } from './renderObjects';
 
 const LEAD_IN = 0.25; // 애니메이션 시작 전 정지 구간(초)
 const HOLD = 0.9; // 종료 후 정지 구간(초)
@@ -99,6 +100,9 @@ export async function renderGif(
   for (const L of section.bgLayers ?? []) {
     if (L.imageDataUrl) await loadImage(L.imageDataUrl).catch(() => null);
   }
+  for (const o of lay.objects) {
+    if (o.imageDataUrl) await loadImage(o.imageDataUrl).catch(() => null);
+  }
 
   // 레이어 1(블록 콘텐츠) 불투명도 — 1 미만이면 프레임마다 별도 캔버스에 그려 합성
   const contentOpacity = section.contentOpacity ?? 1;
@@ -143,6 +147,8 @@ export async function renderGif(
       c.drawImage(cc, 0, 0);
       c.restore();
     }
+    // 자유 배치 오브젝트 (콘텐츠 위)
+    await drawObjectsCanvas(c, lay.objects);
 
     const { data } = c.getImageData(0, 0, canvas.width, canvas.height);
     const palette = quantize(data, 256);

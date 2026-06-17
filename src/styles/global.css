@@ -279,6 +279,20 @@ textarea.img-desc { resize: vertical; outline: none; min-height: 60px; }
 .ed-block.drop-after::after { bottom: -18px; }
 .ed-block { user-select: text; }
 .sg-body-style { margin-top: 8px; }
+
+/* ─── 자유 배치 오브젝트 ─── */
+.obj-layer { z-index: 8; }
+.obj-handle {
+  position: absolute; width: 10px; height: 10px; background: #fff;
+  border: 1.5px solid var(--accent); border-radius: 2px;
+}
+.obj-rotate {
+  position: absolute; width: 12px; height: 12px; border-radius: 50%;
+  background: #fff; border: 1.5px solid var(--accent); cursor: grab;
+}
+.obj-field { flex: 1; font-size: 11px; font-weight: 700; color: var(--ink-3); display: flex; flex-direction: column; gap: 3px; }
+.obj-field .input { padding: 6px 8px; font-size: 12.5px; }
+.paint-picker { margin-top: 6px; }
 .panel-caption { font-size: 11.5px; font-weight: 800; color: var(--ink-3); margin-bottom: 8px; letter-spacing: 0.2px; }
 .ed-canvas ::selection { background: rgba(217, 119, 87, 0.35); }
 /* ─── 레이어 패널 ─── */

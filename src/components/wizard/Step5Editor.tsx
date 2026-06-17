@@ -12,10 +12,14 @@ import { translateSectionFree, type TransLang } from '../../utils/freeTranslate'
 import { resolveSection, untranslatedCount, VIEW_LANGS } from '../../data/viewLang';
 import { useT } from '../../i18n';
 import { CLIP_ANIMS, effectiveUnit } from '../../data/typoAnimations';
+import { layoutSection } from '../../utils/layout';
+import { solid } from '../../data/paint';
 import { SectionPreview } from '../editor/SectionPreview';
 import { AnimPicker } from '../editor/AnimPicker';
 import { StyleGuideModal } from '../editor/StyleGuideModal';
-import type { Block, Project } from '../../state/types';
+import { ObjectLayer } from '../editor/ObjectLayer';
+import { ObjectInspector } from '../editor/ObjectInspector';
+import type { Block, FloatObject, Project } from '../../state/types';
 
 const HIGHLIGHTS = ['#fff176', '#a5f3c4', '#bcd7ff', '#ffc9e0', '#e6d4ff', '#1a1a2e'];
 const CARD_BGS = ['#f6f7f9', '#fff4ec', '#fdf3f8', '#eef4ff', '#ff6b52', '#1a1a2e'];
@@ -41,6 +45,10 @@ export function Step5Editor({ project }: { project: Project }) {
   const imgInput = useRef<HTMLInputElement>(null);
   const fontInput = useRef<HTMLInputElement>(null);
   const contentTaRef = useRef<HTMLTextAreaElement>(null);
+  const [selObjIds, setSelObjIds] = useState<string[]>([]);
+  const [objMode, setObjMode] = useState(false);
+  const objImgInput = useRef<HTMLInputElement>(null);
+  const objImgTarget = useRef<string | null>(null); // 교체 대상 오브젝트 id (null이면 새로 추가)
 
   const width = PLATFORM_WIDTH[project.platform];
   const guide = guideOf(project);
@@ -53,10 +61,52 @@ export function Step5Editor({ project }: { project: Project }) {
     );
   }
   const block = sec.blocks.find((b) => b.id === selBlock) ?? null;
+  const selObj = selObjIds.length === 1 ? (sec.objects ?? []).find((o) => o.id === selObjIds[0]) ?? null : null;
   const allFonts = [
     ...BUILTIN_FONTS.map((f) => ({ family: f.family, label: f.label })),
     ...customFonts.map((f) => ({ family: f.family, label: `${f.family} (업로드)` })),
   ];
+
+  // ── 자유 배치 오브젝트 ──
+  const curSection = () =>
+    useStore.getState().projects.find((p) => p.id === project.id)?.sections.find((s) => s.id === sec.id);
+  const addObject = (o: FloatObject) => {
+    updateSection(project.id, sec.id, { objects: [...(sec.objects ?? []), o] });
+    setSelObjIds([o.id]);
+    setSelBlock(null);
+  };
+  const updateObject = (o: FloatObject) =>
+    updateSection(project.id, sec.id, { objects: (sec.objects ?? []).map((x) => (x.id === o.id ? o : x)) });
+  const patchObject = (patch: Partial<FloatObject>) => {
+    if (selObj) updateObject({ ...selObj, ...patch });
+  };
+  const moveObjects = (ids: string[], dx: number, dy: number) => {
+    const cur = curSection();
+    if (!cur) return;
+    updateSection(project.id, sec.id, {
+      objects: (cur.objects ?? []).map((x) => (ids.includes(x.id) ? { ...x, x: x.x + dx, y: x.y + dy } : x)),
+    });
+  };
+  const deleteObject = (id: string) => {
+    updateSection(project.id, sec.id, { objects: (sec.objects ?? []).filter((o) => o.id !== id) });
+    setSelObjIds([]);
+  };
+  const addShape = (kind: 'rect' | 'ellipse') =>
+    addObject({
+      id: uid(), kind, x: Math.round(width / 2 - 90), y: 120, w: 180, h: 140,
+      rotation: 0, opacity: 1, fill: solid(kind === 'ellipse' ? '#8db3e0' : '#d97757'), stroke: null, radius: kind === 'rect' ? 12 : 0, shadow: null,
+    });
+  const addImageObject = async (file: File) => {
+    const dataUrl = await readFileAsDataUrl(file);
+    const { w, h } = await imageSize(dataUrl);
+    const maxW = Math.min(w, width * 0.7);
+    const ratio = h / w;
+    addObject({
+      id: uid(), kind: 'image', x: Math.round(width / 2 - maxW / 2), y: 120, w: Math.round(maxW), h: Math.round(maxW * ratio),
+      rotation: 0, opacity: 1, fill: null, imageDataUrl: dataUrl, imgNatW: w, imgNatH: h, stroke: null, shadow: null,
+    });
+  };
+  const secHeight = layoutSection(sec, width).height;
 
   const patchBlockById = (bid: string, patch: Partial<Block>) =>
     updateSection(project.id, sec.id, {
@@ -361,8 +411,13 @@ export function Step5Editor({ project }: { project: Project }) {
               <div style={{ marginTop: 12, display: 'grid', gap: 6 }}>
                 <button className="btn ghost sm" onClick={() => addBlock('heading')}>+ 제목 블록</button>
                 <button className="btn ghost sm" onClick={() => addBlock('body')}>+ 본문 블록</button>
-                <button className="btn ghost sm" onClick={() => addBlock('image')}>+ 이미지 블록</button>
                 <button className="btn ghost sm" onClick={() => addBlock('heading', true)}>+ 숫자 뱃지 블록</button>
+              </div>
+              <div className="anim-group-label">자유 배치 (피그마식 — 드래그로 이동·크기·회전)</div>
+              <div style={{ display: 'grid', gap: 6 }}>
+                <button className="btn ghost sm" onClick={() => { objImgTarget.current = null; objImgInput.current?.click(); }}>+ 이미지 (자유 배치)</button>
+                <button className="btn ghost sm" onClick={() => addShape('rect')}>+ 사각형</button>
+                <button className="btn ghost sm" onClick={() => addShape('ellipse')}>+ 타원</button>
               </div>
             </>
           )}
@@ -529,13 +584,26 @@ export function Step5Editor({ project }: { project: Project }) {
 
         <div className="ed-canvas-wrap" onClick={() => setSelBlock(null)}>
           <div>
-            <div className="panel-caption">
-              {viewLang === 'ko'
-                ? '프리뷰창 — 글자를 드래그하면 작업창에 선택이 표시됩니다'
-                : `프리뷰창 — ${viewLang.toUpperCase()} 번역 보기${untranslated > 0 ? ` (미번역 ${untranslated}개는 원문 표시)` : ''}`}
+            <div className="panel-caption" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ flex: 1 }}>
+                {viewLang === 'ko'
+                  ? objMode
+                    ? '프리뷰창 — 오브젝트 모드: 빈 곳 드래그로 영역 선택'
+                    : '프리뷰창 — 글자 드래그 선택 / 오브젝트는 클릭해 이동'
+                  : `프리뷰창 — ${viewLang.toUpperCase()} 번역 보기${untranslated > 0 ? ` (미번역 ${untranslated}개는 원문 표시)` : ''}`}
+              </span>
+              {viewLang === 'ko' && (
+                <button
+                  className={`chip selectable ${objMode ? 'on' : ''}`}
+                  onClick={() => setObjMode((v) => !v)}
+                  title="켜면 빈 영역 드래그로 오브젝트 영역 선택(텍스트 편집 잠시 꺼짐)"
+                >
+                  오브젝트 모드
+                </button>
+              )}
             </div>
             <div className="ed-canvas" style={{ width: width * scale }}>
-            <div style={{ zoom: scale }}>
+            <div style={{ zoom: scale, position: 'relative' }}>
               <SectionPreview
                 section={previewSection}
                 width={width}
@@ -575,13 +643,60 @@ export function Step5Editor({ project }: { project: Project }) {
                     : undefined
                 }
               />
+              {viewLang === 'ko' && (
+                <ObjectLayer
+                  objects={sec.objects ?? []}
+                  width={width}
+                  height={secHeight}
+                  zoom={scale}
+                  selectedIds={selObjIds}
+                  interactive={objMode}
+                  onSelect={(ids) => {
+                    setSelObjIds(ids);
+                    if (ids.length) setSelBlock(null);
+                  }}
+                  onChange={updateObject}
+                  onMove={moveObjects}
+                  onMarquee={setSelObjIds}
+                />
+              )}
             </div>
           </div>
           </div>
+          <input
+            hidden type="file" accept="image/*" ref={objImgInput}
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (!f) return;
+              const tid = objImgTarget.current;
+              objImgTarget.current = null;
+              if (tid) {
+                const dataUrl = await readFileAsDataUrl(f);
+                const { w, h } = await imageSize(dataUrl);
+                const o = (sec.objects ?? []).find((x) => x.id === tid);
+                if (o) updateObject({ ...o, imageDataUrl: dataUrl, imgNatW: w, imgNatH: h });
+              } else {
+                await addImageObject(f);
+              }
+            }}
+          />
         </div>
 
         <aside className="ed-inspector card" style={{ padding: 18 }}>
           <div className="panel-caption" style={{ marginTop: 0 }}>작업창</div>
+          {selObj ? (
+            <ObjectInspector
+              obj={selObj}
+              onChange={patchObject}
+              onDelete={() => deleteObject(selObj.id)}
+              onUploadImage={() => {
+                objImgTarget.current = selObj.id;
+                objImgInput.current?.click();
+              }}
+            />
+          ) : (
+          <>
           <strong style={{ fontSize: 14 }}>섹션: {sec.name}</strong>
           <label className="label">섹션 배경</label>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1124,6 +1239,8 @@ export function Step5Editor({ project }: { project: Project }) {
                 블록 삭제
               </button>
             </>
+          )}
+          </>
           )}
         </aside>
       </div>

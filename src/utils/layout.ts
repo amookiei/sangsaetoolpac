@@ -45,6 +45,20 @@ export interface SectionLayout {
   bg: string;
   bgGrad: { color2: string; angle: number } | null;
   prims: Prim[];
+  objects: import('../state/types').FloatObject[];
+}
+
+/** 회전 사각형의 축정렬 바운딩 박스 하단 y */
+export function rotatedBottom(o: { x: number; y: number; w: number; h: number; rotation: number }): number {
+  const rad = (o.rotation * Math.PI) / 180;
+  const cx = o.x + o.w / 2;
+  const cy = o.y + o.h / 2;
+  const hw = o.w / 2;
+  const hh = o.h / 2;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const ext = Math.abs(hw * sin) + Math.abs(hh * cos);
+  return cy + ext + Math.abs(cx - cx); // cy + vertical extent
 }
 
 /** CSS linear-gradient 각도(0=위, 90=오른쪽) → 시작/끝 좌표 */
@@ -429,11 +443,18 @@ export function layoutSection(section: Section, width: number): SectionLayout {
     }
   }
 
+  const objects = section.objects ?? [];
+  const flowH = Math.max(y - GAP + PAD_Y, 200);
+  const objBottom = objects
+    .filter((o) => !o.hidden)
+    .reduce((mx, o) => Math.max(mx, rotatedBottom(o)), 0);
+
   return {
     width,
-    height: Math.max(y - GAP + PAD_Y, 200),
+    height: Math.max(flowH, Math.ceil(objBottom) + 24),
     bg: section.bg,
     bgGrad: section.bgGrad ?? null,
     prims,
+    objects,
   };
 }
